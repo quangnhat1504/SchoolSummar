@@ -31,6 +31,19 @@ export const config = {
   llmModel: process.env.LLM_MODEL || '',
   retrievalTopK: asInt(process.env.RETRIEVAL_TOP_K, 20),
   rerankTopK: asInt(process.env.RERANK_TOP_K, 8),
+  doclingMode: process.env.DOCLING_MODE || 'mock',
+  doclingServiceUrl: process.env.DOCLING_SERVICE_URL || '',
+  doclingServicePath: process.env.DOCLING_SERVICE_PATH || '/v1/convert',
+  doclingServiceApiKey: process.env.DOCLING_SERVICE_API_KEY || '',
+  doclingTimeoutMs: asInt(process.env.DOCLING_TIMEOUT_MS, 120_000),
+  doclingMaxRetries: asInt(process.env.DOCLING_MAX_RETRIES, 3),
+  doclingPipeline: process.env.DOCLING_PIPELINE || 'standard',
+  doclingOcr: process.env.DOCLING_OCR !== 'false',
+  doclingTables: process.env.DOCLING_TABLES !== 'false',
+  doclingChunksType: process.env.DOCLING_CHUNKS_TYPE || 'hybrid',
+  doclingMaxPages: asInt(process.env.DOCLING_MAX_PAGES, 100),
+  doclingMaxFileSize: asInt(process.env.DOCLING_MAX_FILE_SIZE, 50 * 1024 * 1024),
+  doclingCli: process.env.DOCLING_CLI || 'docling',
 }
 
 export const isProduction = config.nodeEnv === 'production'

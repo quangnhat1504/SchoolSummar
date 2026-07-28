@@ -1,9 +1,21 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Activity, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Copy, FileChartColumn, FileText, Folder, FolderOpen, Grip, History, LayoutDashboard, Menu, MessageCircle, MoreHorizontal, PanelRight, Paperclip, Plus, Search, Send, Settings2, SlidersHorizontal, Sparkles, ThumbsDown, ThumbsUp, Upload, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { Message, MessageContent, MessageResponse } from './components/ai-elements/message'
 import { Conversation, ConversationContent } from './components/ai-elements/conversation'
 import { collections, papers, processingSteps, sourceChunks, type PaperStatus, type SourceChunk } from './data'
+import { LandingPage } from './LandingPage'
+
+const api = async (path: string, init?: RequestInit) => {
+  const response = await fetch(path, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { 'content-type': 'application/json' }), ...(init?.headers || {}) } })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error?.message || 'Request failed')
+  return payload.data
+}
+
+const toUiPaper = (paper: any, index = 0) => ({
+  id: paper.id, title: paper.title || 'Untitled paper', authors: Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors || 'Unknown authors', journal: paper.source || 'Research source', year: Number(paper.metadata?.year || new Date(paper.createdAt || Date.now()).getFullYear()), pages: Number(paper.pages || paper.metadata?.pages || 0), status: (paper.status || 'Processing') as PaperStatus, added: paper.added || 'Just now', collection: paper.collection || paper.metadata?.collection || 'Uncategorized', color: paper.color || ['#d9f5e9', '#e6e8ff', '#fff0c9', '#f5dce9'][index % 4],
+})
 
 const nav = [{ label: 'Research Workspace', to: '/workspace', icon: LayoutDashboard }, { label: 'Papers', to: '/papers', icon: FileText }, { label: 'Collections', to: '/collections', icon: Folder }, { label: 'Processing', to: '/processing', icon: Activity }]
 const secondary = [{ label: 'History', to: '/history', icon: History }, { label: 'Settings', to: '/settings', icon: Settings2 }]
@@ -22,17 +34,137 @@ function PdfPreview({ page }: { page: number }) { return <div className="pdf-pre
 function SourceInspector({ source, index, onSelect, onClose }: { source: SourceChunk; index: number; onSelect: (index: number) => void; onClose: () => void }) { return <aside className="source-inspector"><div className="inspector-header"><h2>Sources</h2><IconButton label="Close sources" onClick={onClose}><X size={17} /></IconButton></div><div className="source-pager"><span><ChevronLeft size={13} /> {index + 1} of {sourceChunks.length} <ChevronRight size={13} /></span><div><IconButton label="Previous source" onClick={() => onSelect(index ? index - 1 : 1)}><ChevronLeft size={15} /></IconButton><IconButton label="Next source" onClick={() => onSelect((index + 1) % 2)}><ChevronRight size={15} /></IconButton></div></div><div className="source-title-row"><span className="source-number">{index + 1}</span><div><h3>{source.title}</h3><p>{source.authors}, {source.journal}</p></div></div><div className="source-meta"><span><FileText size={14} /> Page {source.page}</span><span className="chunk-chip">Chunk 04</span><IconButton label="Open source"><ArrowUpRight size={15} /></IconButton></div><PdfPreview page={source.page} /><div className="pdf-controls"><IconButton label="Zoom out"><ZoomOut size={15} /></IconButton><span>100%</span><IconButton label="Zoom in"><ZoomIn size={15} /></IconButton><IconButton label="Fullscreen"><Grip size={15} /></IconButton></div><div className="inspector-section"><div className="section-heading"><h3>Selected passage</h3><IconButton label="Copy passage"><Copy size={14} /></IconButton></div><div className="passage-box">{source.passage}</div></div><div className="chunk-meta"><div><span>Chunk ID</span><code>{source.id}</code></div><div><span>Retrieval score</span><code>{source.score.toFixed(2)}</code></div></div><details className="why-source" open><summary>Why this source <ChevronDown size={15} /></summary><p>{source.reason}</p></details></aside> }
 
 function Workspace({ onMenu }: { onMenu: () => void }) {
-  const [selected, setSelected] = useState(0); const [question, setQuestion] = useState(''); const [sending, setSending] = useState(false); const [sourcesOpen, setSourcesOpen] = useState(() => window.innerWidth > 760)
-  const send = () => { if (!question.trim()) return; setSending(true); setQuestion(''); window.setTimeout(() => setSending(false), 800) }
-  return <div className="workspace-page"><Topbar title="Ask your papers" subtitle="Ask questions across your library. Answers are grounded in your sources." onMenu={onMenu} action={<div className="topbar-actions"><IconButton label="Conversation history"><History size={17} /></IconButton><button className="outline-button"><Plus size={16} /> New chat</button><IconButton label="Toggle sources" onClick={() => setSourcesOpen(!sourcesOpen)}><PanelRight size={17} /></IconButton></div>} /><div className={`workspace-grid ${sourcesOpen ? '' : 'sources-hidden'}`}><main className="conversation-pane"><Conversation className="conversation-shell"><ConversationContent className="conversation-content"><Message from="user" className="user-message"><MessageContent className="user-bubble">What did the authors find about the relationship between attention and memory consolidation?</MessageContent><span className="message-time">10:24 AM</span></Message><Message from="assistant" className="assistant-message"><div className="assistant-avatar"><Sparkles size={15} /></div><MessageContent className="answer-content"><MessageResponse>The authors found that attention during encoding plays a critical role in driving memory consolidation. Specifically, they observed that items encoded under high attentional focus showed significantly greater stabilization of neural representations during sleep compared to low-attention encoding conditions [1]. This was evidenced by increased slow-wave activity and hippocampal–neocortical coupling, which predicted stronger recall performance the next day [1][2].</MessageResponse><div className="answer-citations"><button className={selected === 0 ? 'selected' : ''} onClick={() => { setSelected(0); setSourcesOpen(true) }}><span>1</span> Smith et al., 2021 <b>p. 7</b></button><button className={selected === 1 ? 'selected' : ''} onClick={() => { setSelected(1); setSourcesOpen(true) }}><span>2</span> Chen et al., 2020 <b>p. 12</b></button></div></MessageContent><div className="message-actions"><IconButton label="Helpful"><ThumbsUp size={15} /></IconButton><IconButton label="Not helpful"><ThumbsDown size={15} /></IconButton><IconButton label="Copy answer"><Copy size={15} /></IconButton></div></Message>{sending && <Message from="assistant" className="assistant-message"><div className="assistant-avatar"><Sparkles size={15} /></div><MessageContent className="answer-content"><span className="typing-dots"><i /><i /><i /></span></MessageContent></Message>}</ConversationContent></Conversation><div className="composer-wrap"><div className="composer"><textarea value={question} onChange={e => setQuestion(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} placeholder="Ask a follow-up question..." rows={1} /><div className="composer-footer"><IconButton label="Attach paper"><Paperclip size={17} /></IconButton><button className="scope-select">All papers <ChevronDown size={14} /></button><button className={`send-button ${question.trim() ? 'ready' : ''}`} aria-label="Send question" onClick={send}><Send size={16} /></button></div></div><p className="grounding-note">Answers are grounded in your papers. Please verify important information.</p></div><Pipeline compact /></main>{sourcesOpen && <SourceInspector source={sourceChunks[selected]} index={selected} onSelect={setSelected} onClose={() => setSourcesOpen(false)} />}</div></div>
+  const [selected, setSelected] = useState(0)
+  const [question, setQuestion] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sourcesOpen, setSourcesOpen] = useState(() => window.innerWidth > 760)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Array<{ id: string; role: 'user' | 'assistant'; content: string }>>([])
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let socket: WebSocket | undefined
+    let disposed = false
+    const load = async () => {
+      try {
+        const session = await api('/api/v1/sessions', { method: 'POST', body: JSON.stringify({ title: 'Research workspace' }) })
+        if (disposed) return
+        setSessionId(session.id)
+        const history = await api(`/api/v1/sessions/${session.id}/messages`)
+        setMessages(history.map((message: any) => ({ id: message.id, role: message.role, content: message.content })))
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+        socket = new WebSocket(`${protocol}://${window.location.host}/realtime`)
+        socket.onmessage = (event) => {
+          const message = JSON.parse(event.data)
+          if (message.type === 'chat.started') setSending(true)
+          if (message.type === 'chat.delta') setMessages((current) => { const found = current.find((item) => item.id === message.payload.messageId); if (found) return current.map((item) => item.id === found.id ? { ...item, content: item.content + message.payload.delta } : item); return [...current, { id: message.payload.messageId, role: 'assistant', content: message.payload.delta }] })
+          if (message.type === 'chat.completed' || message.type === 'chat.failed') setSending(false)
+        }
+      } catch (loadError) { if (!disposed) setError(loadError instanceof Error ? loadError.message : 'Unable to connect to the research backend') }
+    }
+    void load()
+    return () => { disposed = true; socket?.close() }
+  }, [])
+
+  const send = async () => {
+    const content = question.trim()
+    if (!content || !sessionId || sending) return
+    setQuestion(''); setError(''); setSending(true)
+    const optimistic = { id: `local-${Date.now()}`, role: 'user' as const, content }
+    setMessages((current) => [...current, optimistic])
+    try { await api(`/api/v1/sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify({ content }) }) }
+    catch (sendError) { setSending(false); setError(sendError instanceof Error ? sendError.message : 'Unable to send question') }
+  }
+
+  return (
+    <div className="workspace-page">
+      <Topbar
+        title="Ask your papers"
+        subtitle="Ask questions across your library. Answers are grounded in your sources."
+        onMenu={onMenu}
+        action={
+          <div className="topbar-actions">
+            <IconButton label="Conversation history"><History size={17} /></IconButton>
+            <button className="outline-button" onClick={() => setMessages([])}><Plus size={16} /> New chat</button>
+            <IconButton label="Toggle sources" onClick={() => setSourcesOpen(!sourcesOpen)}><PanelRight size={17} /></IconButton>
+          </div>
+        }
+      />
+      <div className={`workspace-grid ${sourcesOpen ? '' : 'sources-hidden'}`}>
+        <main className="conversation-pane">
+          <Pipeline compact />
+          <Conversation className="conversation-shell">
+            <ConversationContent className="conversation-content">
+              {messages.length === 0 && (
+                <div className="empty-state">
+                  <Sparkles size={20} />
+                  <strong>Ask your research library</strong>
+                  <span>Your answer will stream in realtime with source citations.</span>
+                </div>
+              )}
+              {messages.map((message) => (
+                <Message key={message.id} from={message.role} className={message.role === 'user' ? 'user-message' : 'assistant-message'}>
+                  {message.role === 'assistant' && <div className="assistant-avatar"><Sparkles size={15} /></div>}
+                  <MessageContent className={message.role === 'user' ? 'user-bubble' : 'answer-content'}>
+                    {message.role === 'assistant' ? <MessageResponse>{message.content}</MessageResponse> : message.content}
+                  </MessageContent>
+                  {message.role === 'assistant' && (
+                    <div className="message-actions">
+                      <IconButton label="Helpful"><ThumbsUp size={15} /></IconButton>
+                      <IconButton label="Not helpful"><ThumbsDown size={15} /></IconButton>
+                      <IconButton label="Copy answer"><Copy size={15} /></IconButton>
+                    </div>
+                  )}
+                </Message>
+              ))}
+              {sending && (
+                <Message from="assistant" className="assistant-message">
+                  <div className="assistant-avatar"><Sparkles size={15} /></div>
+                  <MessageContent className="answer-content"><span className="typing-dots"><i /><i /><i /></span></MessageContent>
+                </Message>
+              )}
+            </ConversationContent>
+          </Conversation>
+          <div className="composer-wrap">
+            <div className="composer">
+              <label className="sr-only" htmlFor="research-question">Ask your research library</label>
+              <textarea
+                id="research-question"
+                value={question}
+                onChange={e => setQuestion(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    void send()
+                  }
+                }}
+                placeholder="Ask a follow-up question..."
+                rows={1}
+              />
+              <div className="composer-footer">
+                <IconButton label="Attach paper"><Paperclip size={17} /></IconButton>
+                <button className="scope-select">All papers <ChevronDown size={14} /></button>
+                <button className={`send-button ${question.trim() ? 'ready' : ''}`} aria-label="Send question" onClick={() => void send()} disabled={!question.trim() || sending}>
+                  <Send size={16} />
+                </button>
+              </div>
+            </div>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <p className="grounding-note">Answers are grounded in your papers. Please verify important information.</p>
+          </div>
+        </main>
+        {sourcesOpen && <SourceInspector source={sourceChunks[selected]} index={selected} onSelect={setSelected} onClose={() => setSourcesOpen(false)} />}
+      </div>
+    </div>
+  )
 }
 
-function Papers({ onUpload, onMenu }: { onUpload: () => void; onMenu: () => void }) { const [query, setQuery] = useState(''); const filtered = useMemo(() => papers.filter(p => `${p.title} ${p.authors}`.toLowerCase().includes(query.toLowerCase())), [query]); return <div className="page-content"><Topbar title="Papers" subtitle="Your research library, ready for grounded answers." onMenu={onMenu} action={<button className="primary-button" onClick={onUpload}><Upload size={16} /> Upload paper</button>} /><div className="library-toolbar"><div className="search-field"><Search size={16} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search papers, authors, DOI..." /></div><button className="filter-button"><SlidersHorizontal size={15} /> Filters</button><select><option>All papers</option><option>Ready</option><option>Processing</option></select></div><div className="paper-summary"><div><span className="eyebrow">LIBRARY</span><strong>{filtered.length} papers</strong></div><span>Last updated just now</span></div><div className="paper-table"><div className="paper-table-head"><span>Paper</span><span>Collection</span><span>Pages</span><span>Status</span><span>Added</span><span /></div>{filtered.map(p => <Link className="paper-row" to={`/papers/${p.id}`} key={p.id}><span className="paper-info"><span className="paper-icon" style={{ background: p.color }}><FileText size={18} /></span><span><strong>{p.title}</strong><small>{p.authors} · {p.journal}, {p.year}</small></span></span><span className="collection-cell"><Folder size={14} />{p.collection}</span><span className="muted-cell">{p.pages} pages</span><StatusDot status={p.status} /><span className="muted-cell">{p.added}</span><ArrowUpRight size={16} className="row-arrow" /></Link>)}</div></div> }
+function Papers({ onUpload, onMenu }: { onUpload: () => void; onMenu: () => void }) { const [query, setQuery] = useState(''); const [remote, setRemote] = useState<typeof papers | null>(null); const [error, setError] = useState(''); useEffect(() => { void api('/api/v1/papers').then((payload) => setRemote(payload.items.map(toUiPaper))).catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Unable to load papers')) }, []); const source = remote || papers; const filtered = useMemo(() => source.filter(p => `${p.title} ${p.authors}`.toLowerCase().includes(query.toLowerCase())), [query, source]); return <div className="page-content"><Topbar title="Papers" subtitle="Your research library, ready for grounded answers." onMenu={onMenu} action={<button className="primary-button" onClick={onUpload}><Upload size={16} /> Upload paper</button>} /><div className="library-toolbar"><div className="search-field"><Search size={16} /><input aria-label="Search papers" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search papers, authors, DOI..." /></div><button className="filter-button"><SlidersHorizontal size={15} /> Filters</button><select aria-label="Filter papers"><option>All papers</option><option>Ready</option><option>Processing</option></select></div>{error && <p className="form-error" role="alert">{error}</p>}<div className="paper-summary"><div><span className="eyebrow">LIBRARY</span><strong>{filtered.length} papers</strong></div><span>Live data · updated just now</span></div><div className="paper-table"><div className="paper-table-head"><span>Paper</span><span>Collection</span><span>Pages</span><span>Status</span><span>Added</span><span /></div>{filtered.map(p => <Link className="paper-row" to={`/papers/${p.id}`} key={p.id}><span className="paper-info"><span className="paper-icon" style={{ background: p.color }}><FileText size={18} /></span><span><strong>{p.title}</strong><small>{p.authors} · {p.journal}, {p.year}</small></span></span><span className="collection-cell"><Folder size={14} />{p.collection}</span><span className="muted-cell">{p.pages || '—'} pages</span><StatusDot status={p.status} /><span className="muted-cell">{p.added}</span><ArrowUpRight size={16} className="row-arrow" /></Link>)}</div></div> }
 function Processing({ onMenu }: { onMenu: () => void }) { return <div className="page-content"><Topbar title="Processing" subtitle="Monitor ingestion quality from PDF to searchable embeddings." onMenu={onMenu} action={<button className="outline-button"><Activity size={16} /> Refresh status</button>} /><div className="processing-overview"><div><span className="eyebrow">PIPELINE HEALTH</span><h2>Everything is moving smoothly.</h2><p>One paper is currently being prepared for retrieval.</p></div><div className="health-ring"><strong>3/4</strong><span>ready</span></div></div><div className="jobs-list">{papers.map((p, i) => <div className="job-card" key={p.id}><div className="job-title"><span className="paper-icon" style={{ background: p.color }}><FileText size={17} /></span><div><strong>{p.title}</strong><span>{p.authors} · Updated {i ? 'Yesterday' : '2 min ago'}</span></div><StatusDot status={p.status} /><IconButton label="More actions"><MoreHorizontal size={17} /></IconButton></div><div className="job-progress"><div className="progress-track"><span style={{ width: `${p.status === 'Ready' ? 100 : p.status === 'Processing' ? 66 : 42}%` }} /></div><span>{p.status === 'Ready' ? '100%' : p.status === 'Processing' ? '66%' : '42%'}</span></div><div className="job-steps">{processingSteps.map((step, j) => <span className={j < (p.status === 'Ready' ? 4 : p.status === 'Processing' ? 3 : 2) ? 'done' : ''} key={step.label}>{j < 3 ? <CheckCircle2 size={14} /> : <span className="step-number">{j + 1}</span>}{step.label}</span>)}</div></div>)}</div></div> }
 function PaperDetail({ onMenu }: { onMenu: () => void }) { const { paperId } = useParams(); const paper = papers.find(p => p.id === paperId) ?? papers[0]; const [page, setPage] = useState(7); return <div className="page-content paper-detail-page"><Topbar title={paper.title} subtitle={`${paper.authors} · ${paper.journal}, ${paper.year}`} onMenu={onMenu} action={<div className="topbar-actions"><StatusDot status={paper.status} /><button className="outline-button"><MoreHorizontal size={16} /> Actions</button></div>} /><div className="detail-tabs"><button className="active"><BookOpen size={15} /> PDF viewer</button><button><FileText size={15} /> Extracted text</button><button><Grip size={15} /> Chunks</button></div><div className="paper-detail-grid"><section className="document-viewer"><div className="viewer-toolbar"><span>Page {page} of {paper.pages}</span><div><IconButton label="Previous page" onClick={() => setPage(Math.max(1, page - 1))}><ChevronLeft size={16} /></IconButton><IconButton label="Next page" onClick={() => setPage(Math.min(paper.pages, page + 1))}><ChevronRight size={16} /></IconButton><span className="toolbar-separator" /><IconButton label="Zoom out"><ZoomOut size={16} /></IconButton><span>100%</span><IconButton label="Zoom in"><ZoomIn size={16} /></IconButton></div></div><PdfPreview page={page} /></section><section className="extracted-panel"><div className="panel-heading"><div><span className="eyebrow">SELECTED CONTENT</span><h2>Extracted text</h2></div><IconButton label="Open in workspace"><ArrowUpRight size={16} /></IconButton></div><div className="extracted-card"><div className="extracted-card-head"><span>Chunk 04</span><span className="score-label">0.87 retrieval score</span></div><p>{sourceChunks[0].passage}</p><button className="text-button"><Copy size={14} /> Copy chunk</button></div><div className="content-metadata"><div><span>Page range</span><code>07–08</code></div><div><span>Extraction confidence</span><code>98.4%</code></div><div><span>Characters</span><code>1,284</code></div></div><button className="issue-button"><CircleHelp size={15} /> Flag extraction issue</button></section></div><Pipeline /></div> }
 function Collections() { return <div className="page-content"><Topbar title="Collections" subtitle="Organize papers by project, question, or research thread." action={<button className="primary-button"><Plus size={16} /> New collection</button>} /><div className="collection-grid">{collections.map(c => <Link to="/workspace" className="collection-card" key={c.name}><div className="collection-card-top"><span className="collection-mark" style={{ background: `${c.accent}18`, color: c.accent }}><FolderOpen size={20} /></span><IconButton label="Collection actions"><MoreHorizontal size={17} /></IconButton></div><h2>{c.name}</h2><p>{c.description}</p><div><strong>{c.count}</strong><span>{c.count === 1 ? 'paper' : 'papers'}</span><ArrowUpRight size={15} /></div></Link>)}</div><div className="collection-tip"><Sparkles size={18} /><div><strong>Ask a collection to get a more focused answer.</strong><p>When selected, citations are limited to papers inside it.</p></div><Link to="/workspace" className="text-button">Try it <ArrowRight size={14} /></Link></div></div> }
 function HistoryPage() { const rows = ['What did the authors find about the relationship between attention and memory consolidation?', 'How does overnight consolidation differ between high and low attention?', 'Which mechanisms were proposed to explain the effect?']; return <div className="page-content"><Topbar title="History" subtitle="Return to previous questions and continue your research thread." /><div className="history-list">{rows.map((row, i) => <Link to="/workspace" className="history-row" key={row}><span className="history-icon"><MessageCircle size={17} /></span><span><strong>{row}</strong><small>{i + 1} sources · Memory & cognition</small></span><time>{i ? 'Yesterday' : 'Today, 10:24 AM'}</time><ArrowRight size={16} /></Link>)}</div></div> }
 function SettingsPage() { return <div className="page-content"><Topbar title="Settings" subtitle="Personalize how your research assistant works." /><div className="settings-layout"><nav className="settings-nav"><button className="active">General</button><button>Retrieval</button><button>Data & privacy</button><button>Account</button></nav><section className="settings-panel"><div className="settings-section"><div><h2>Profile</h2><p>How you appear in your research workspace.</p></div><div className="profile-form"><div className="large-avatar">AK</div><div className="field-grid"><label>Display name<input defaultValue="Avery Kim" /></label><label>Role<input defaultValue="Researcher" /></label></div></div></div><div className="settings-section"><div><h2>Answer preferences</h2><p>Control the shape and grounding of generated answers.</p></div>{['Show retrieval scores', 'Require source citations'].map(label => <label className="setting-row" key={label}><span><strong>{label}</strong><small>Display transparent evidence beside each answer.</small></span><button className="toggle on"><span /></button></label>)}</div><div className="settings-section"><div><h2>Appearance</h2><p>Light theme is optimized for long reading sessions.</p></div><div className="appearance-options"><button className="appearance-option active"><span className="theme-preview light-preview" />Light</button><button className="appearance-option"><span className="theme-preview system-preview" />System</button></div></div></section></div></div> }
-function UploadModal({ onClose }: { onClose: () => void }) { const input = useRef<HTMLInputElement>(null); const [file, setFile] = useState(''); const [loading, setLoading] = useState(false); const upload = () => { if (!file) return; setLoading(true); window.setTimeout(onClose, 900) }; return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className="upload-modal" role="dialog" aria-modal="true"><div className="modal-header"><div><span className="eyebrow">ADD TO LIBRARY</span><h2>Upload a paper</h2><p>We’ll detect layout, extract text, and prepare it for grounded answers.</p></div><IconButton label="Close upload modal" onClick={onClose}><X size={17} /></IconButton></div><button className={`dropzone ${file ? 'has-file' : ''}`} onClick={() => input.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f.name) }}><input ref={input} type="file" accept="application/pdf" hidden onChange={e => setFile(e.target.files?.[0]?.name ?? '')} />{file ? <><span className="drop-icon success"><CheckCircle2 size={24} /></span><strong>{file}</strong><small>Ready to add to your library</small></> : <><span className="drop-icon"><Upload size={23} /></span><strong>Drop your PDF here</strong><small>or click to browse · PDF up to 50 MB</small></>}</button><div className="or-divider"><span>or</span></div><label className="url-field">Paste an arXiv or DOI URL<input placeholder="https://arxiv.org/abs/..." /></label><div className="modal-footer"><button className="text-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={!file || loading} onClick={upload}>{loading ? 'Uploading…' : 'Upload & process'} <ArrowRight size={15} /></button></div></div></div> }
+function UploadModal({ onClose }: { onClose: () => void }) { const input = useRef<HTMLInputElement>(null); const [file, setFile] = useState<File | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const upload = async () => { if (!file) return; setLoading(true); setError(''); const body = new FormData(); body.append('file', file); try { await api('/api/v1/papers/upload', { method: 'POST', body }); onClose() } catch (uploadError) { setError(uploadError instanceof Error ? uploadError.message : 'Upload failed'); setLoading(false) } }; return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-title"><div className="modal-header"><div><span className="eyebrow">ADD TO LIBRARY</span><h2 id="upload-title">Upload a paper</h2><p>We’ll detect layout, extract text, and prepare it for grounded answers.</p></div><IconButton label="Close upload modal" onClick={onClose}><X size={17} /></IconButton></div><button type="button" className={`dropzone ${file ? 'has-file' : ''}`} onClick={() => input.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const dropped = e.dataTransfer.files[0]; if (dropped) setFile(dropped) }}><input ref={input} type="file" accept="application/pdf" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />{file ? <><span className="drop-icon success"><CheckCircle2 size={24} /></span><strong>{file.name}</strong><small>Ready to add to your library</small></> : <><span className="drop-icon"><Upload size={23} /></span><strong>Drop your PDF here</strong><small>or click to browse · PDF up to 50 MB</small></>}</button>{error && <p className="form-error" role="alert">{error}</p>}<div className="or-divider"><span>or</span></div><label className="url-field">Paste an arXiv or DOI URL<input aria-label="arXiv or DOI URL" placeholder="https://arxiv.org/abs/..." /></label><div className="modal-footer"><button className="text-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={!file || loading} onClick={() => void upload()}>{loading ? 'Uploading…' : 'Upload & process'} <ArrowRight size={15} /></button></div></div></div> }
 
-export function App() { const [menuOpen, setMenuOpen] = useState(false); const [uploadOpen, setUploadOpen] = useState(false); const location = useLocation(); const isWorkspace = location.pathname === '/' || location.pathname === '/workspace'; const onUpload = () => setUploadOpen(true); const onMenu = () => setMenuOpen(true); return <div className="app-shell"><div className={`mobile-overlay ${menuOpen ? 'visible' : ''}`} onClick={() => setMenuOpen(false)} /><div className={`sidebar-wrap ${menuOpen ? 'open' : ''}`}><Sidebar onUpload={onUpload} onClose={() => setMenuOpen(false)} /></div><main className="app-main"><Routes><Route path="/" element={<Workspace onMenu={onMenu} />} /><Route path="/workspace" element={<Workspace onMenu={onMenu} />} /><Route path="/papers" element={<Papers onUpload={onUpload} onMenu={onMenu} />} /><Route path="/papers/:paperId" element={<PaperDetail onMenu={onMenu} />} /><Route path="/collections" element={<Collections />} /><Route path="/processing" element={<Processing onMenu={onMenu} />} /><Route path="/history" element={<HistoryPage />} /><Route path="/settings" element={<SettingsPage />} /><Route path="*" element={<Workspace onMenu={onMenu} />} /></Routes></main>{uploadOpen && <UploadModal onClose={() => setUploadOpen(false)} />}</div> }
+export function App() { const [menuOpen, setMenuOpen] = useState(false); const [uploadOpen, setUploadOpen] = useState(false); const location = useLocation(); const onUpload = () => setUploadOpen(true); const onMenu = () => setMenuOpen(true); if (location.pathname === '/' || location.pathname === '/landing') return <LandingPage />; return <div className="app-shell"><div className={`mobile-overlay ${menuOpen ? 'visible' : ''}`} onClick={() => setMenuOpen(false)} /><div className={`sidebar-wrap ${menuOpen ? 'open' : ''}`}><Sidebar onUpload={onUpload} onClose={() => setMenuOpen(false)} /></div><main className="app-main" key={location.pathname}><Routes><Route path="/workspace" element={<Workspace onMenu={onMenu} />} /><Route path="/papers" element={<Papers onUpload={onUpload} onMenu={onMenu} />} /><Route path="/papers/:paperId" element={<PaperDetail onMenu={onMenu} />} /><Route path="/collections" element={<Collections />} /><Route path="/processing" element={<Processing onMenu={onMenu} />} /><Route path="/history" element={<HistoryPage />} /><Route path="/settings" element={<SettingsPage />} /><Route path="*" element={<Workspace onMenu={onMenu} />} /></Routes></main>{uploadOpen && <UploadModal onClose={() => setUploadOpen(false)} />}</div> }

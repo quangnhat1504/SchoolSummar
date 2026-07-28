@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 6100 --strictPort",
     "check": "tsc -b --pretty false",
+    "test": "node --test tests/*.test.mjs",
     "start": "node server.mjs",
     "serve": "npm run build && npm start"
   },
@@ -40,7 +41,9 @@
     "react-router-dom": "latest",
     "streamdown": "^2.5.0",
     "use-stick-to-bottom": "^1.1.6",
-    "ws": "^8.21.1"
+    "uuid": "^14.0.1",
+    "ws": "^8.21.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/react": "latest",
