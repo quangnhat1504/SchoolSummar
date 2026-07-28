@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.sample
+
+# Local development artifacts
+.venv/
+node_modules/
+dist/
+build/
+coverage/
+.pytest_cache/
+__pycache__/
+
