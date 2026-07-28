@@ -46,6 +46,26 @@ the third argument to `set_config` must remain `true`.
 7. Insert embeddings into `chunk_embeddings`; mark only the selected model/run active.
 8. Mark the processing run active only after all required stages succeed.
 
+### Docling integration
+
+Docling is the document-conversion boundary for PDF ingestion. The Node API
+does not import Python packages directly; it calls `server/docling.mjs`, which
+supports three modes:
+
+- `DOCLING_MODE=mock` for deterministic local development and tests.
+- `DOCLING_MODE=service` for a Docling Serve/custom HTTP worker. The adapter
+  sends the PDF as multipart form data with pipeline, OCR, table, chunking,
+  page-limit, and idempotency-key fields.
+- `DOCLING_MODE=cli` for a locally installed `docling` executable.
+
+The adapter normalizes Docling output into pages, layout blocks, OCR results,
+Markdown, and chunks. The processing worker persists that normalized result
+before completing the regular page/layout/OCR/chunk/embedding job sequence and
+publishes a `processing.docling` realtime event. Service and CLI calls have a
+bounded timeout and exponential retry for transient failures. The default
+`mock` mode intentionally avoids downloading Docling models when the project
+is first started; production should set `DOCLING_MODE=service` or `cli`.
+
 Every worker must be idempotent. Use the unique constraints on run/stage,
 page number, chunk index, OCR engine, and embedding model as the final guard
 against duplicate writes.
