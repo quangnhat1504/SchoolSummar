@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowDownRight,
@@ -55,6 +55,34 @@ function PipelineCard() {
 
 export function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    const page = document.querySelector<HTMLElement>('.landing-page')
+    if (!page) return
+
+    const sections = Array.from(page.querySelectorAll<HTMLElement>('.signal-strip, .landing-section, .landing-footer'))
+    page.classList.add('motion-ready')
+
+    if (!('IntersectionObserver' in window)) {
+      sections.forEach((section) => section.classList.add('reveal-visible'))
+      return
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return
+        entry.target.classList.add('reveal-visible')
+        observer.unobserve(entry.target)
+      })
+    }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 })
+
+    sections.forEach((section) => {
+      section.classList.add('reveal-on-scroll')
+      observer.observe(section)
+    })
+
+    return () => observer.disconnect()
+  }, [])
 
   return <div className="landing-page">
     <a className="landing-skip" href="#main-content">Skip to content</a>

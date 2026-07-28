@@ -2,7 +2,7 @@ import { createApp } from './server/app.mjs'
 
 const app = createApp()
 app.server.listen(app.config.port, app.config.host, () => {
-  app.logger.info({ url: `${app.config.appUrl}`, mode: app.store.kind, realtime: '/realtime' }, 'Research RAG server started')
+  app.logger.info({ url: `${app.config.appUrl}`, mode: app.store.kind, llm: app.llm.health(), realtime: '/realtime' }, 'Research RAG server started')
 })
 
 const shutdown = async (signal) => {

@@ -483,6 +483,272 @@ body { font-size: 14px; }
   .conversation-pane > .pipeline.compact { margin: 12px 18px 0; }
 }
 
+/* Landing polish: fluid sizing, a stable reading frame, and scroll-linked
+   reveals that only use compositor-friendly properties. */
+html { scroll-behavior: smooth; }
+
+.landing-page {
+  overflow: clip;
+  --landing-ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+.landing-header {
+  position: sticky;
+  top: 0;
+  box-shadow: 0 1px 0 rgba(18, 34, 59, .03);
+}
+
+.landing-page .landing-container {
+  width: min(1240px, calc(100% - 72px));
+}
+
+.landing-hero {
+  min-height: 650px;
+  padding: clamp(66px, 7vw, 96px) 0 28px;
+}
+
+.hero-grid {
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: clamp(28px, 4.5vw, 72px);
+}
+
+.hero-visual {
+  min-height: clamp(390px, 43vw, 510px);
+}
+
+.hero-console {
+  width: min(100%, 600px);
+}
+
+.landing-section {
+  padding: clamp(72px, 6vw, 104px) 0;
+}
+
+.section-heading {
+  gap: clamp(28px, 5vw, 72px);
+  margin-bottom: clamp(38px, 4vw, 54px);
+}
+
+.capability-card {
+  min-height: 292px;
+  padding: 23px;
+}
+
+.capability-top { margin-bottom: 46px; }
+
+.process-grid,
+.evidence-grid {
+  gap: clamp(42px, 6vw, 82px);
+}
+
+.final-section { padding: clamp(78px, 8vw, 112px) 0; }
+
+@keyframes landing-header-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes landing-hero-copy-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes landing-hero-visual-in {
+  from { opacity: 0; transform: translate3d(18px, 10px, 0) scale(.985); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+.landing-header { animation: landing-header-in 420ms var(--landing-ease) both; }
+.hero-copy > * { animation: landing-hero-copy-in 520ms var(--landing-ease) both; }
+.hero-copy > :nth-child(2) { animation-delay: 70ms; }
+.hero-copy > :nth-child(3) { animation-delay: 130ms; }
+.hero-copy > :nth-child(4) { animation-delay: 190ms; }
+.hero-copy > :nth-child(5) { animation-delay: 250ms; }
+.hero-visual { animation: landing-hero-visual-in 650ms var(--landing-ease) 140ms both; }
+
+.landing-page.motion-ready .reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 560ms var(--landing-ease), transform 560ms var(--landing-ease);
+}
+
+.landing-page.motion-ready .reveal-on-scroll.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.landing-page.motion-ready .capability-card,
+.landing-page.motion-ready .pipeline-row,
+.landing-page.motion-ready .pipeline-result,
+.landing-page.motion-ready .metrics-grid > div {
+  transition: opacity 440ms var(--landing-ease), transform 440ms var(--landing-ease);
+}
+
+.landing-page.motion-ready .reveal-visible .capability-card,
+.landing-page.motion-ready .reveal-visible .pipeline-row,
+.landing-page.motion-ready .reveal-visible .pipeline-result,
+.landing-page.motion-ready .reveal-visible .metrics-grid > div {
+  animation: landing-hero-copy-in 460ms var(--landing-ease) both;
+}
+
+.landing-page.motion-ready .reveal-visible .capability-card:nth-child(2),
+.landing-page.motion-ready .reveal-visible .pipeline-row:nth-child(2),
+.landing-page.motion-ready .reveal-visible .metrics-grid > div:nth-child(2) { animation-delay: 55ms; }
+.landing-page.motion-ready .reveal-visible .capability-card:nth-child(3),
+.landing-page.motion-ready .reveal-visible .pipeline-row:nth-child(3),
+.landing-page.motion-ready .reveal-visible .metrics-grid > div:nth-child(3) { animation-delay: 110ms; }
+
+@media (max-width: 1050px) {
+  .landing-page .landing-container { width: min(100% - 52px, 900px); }
+  .hero-grid { grid-template-columns: 1fr; }
+  .hero-visual { min-height: 390px; }
+}
+
+@media (max-width: 760px) {
+  .landing-page .landing-container { width: calc(100% - 36px); }
+  .landing-hero { padding-top: 60px; }
+  .hero-visual { min-height: 345px; }
+  .landing-section { padding: 68px 0; }
+  .capability-card { min-height: 270px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  .landing-header,
+  .hero-copy > *,
+  .hero-visual,
+  .landing-page.motion-ready .reveal-on-scroll,
+  .landing-page.motion-ready .reveal-visible .capability-card,
+  .landing-page.motion-ready .reveal-visible .pipeline-row,
+  .landing-page.motion-ready .reveal-visible .pipeline-result,
+  .landing-page.motion-ready .reveal-visible .metrics-grid > div {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Wide-screen calibration: use the canvas without letting short copy float in
+   oversized boxes. The visual language stays the same; only the proportion
+   between content and frame changes. */
+.landing-page .landing-container {
+  width: min(1540px, calc(100% - 96px));
+}
+
+.landing-hero {
+  min-height: 630px;
+  padding-block: clamp(58px, 5.5vw, 82px) 24px;
+}
+
+.hero-grid {
+  grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+  gap: clamp(32px, 4vw, 68px);
+}
+
+.hero-visual {
+  min-height: clamp(390px, 32vw, 500px);
+}
+
+.hero-console {
+  width: min(100%, 680px);
+}
+
+.landing-section {
+  padding-block: clamp(62px, 5vw, 88px);
+}
+
+.capability-card {
+  min-height: 270px;
+}
+
+.capability-top {
+  margin-bottom: 38px;
+}
+
+.process-grid {
+  grid-template-columns: minmax(320px, .72fr) minmax(0, 1.28fr);
+}
+
+.pipeline-list {
+  width: min(100%, 900px);
+  justify-self: end;
+}
+
+.evidence-grid {
+  grid-template-columns: minmax(320px, .76fr) minmax(0, 1.24fr);
+}
+
+.evidence-card {
+  width: min(100%, 930px);
+  justify-self: end;
+}
+
+.metrics-grid > div {
+  min-height: 124px;
+  padding: 24px 32px;
+}
+
+.metrics-grid strong {
+  font-size: 46px;
+}
+
+.final-section {
+  padding-block: 70px 82px;
+}
+
+.final-card {
+  width: min(100%, 1080px);
+  margin-inline: auto;
+  padding: 64px 24px;
+}
+
+.footer-inner {
+  min-height: 76px;
+}
+
+@media (max-width: 1050px) {
+  .landing-page .landing-container { width: min(100% - 52px, 960px); }
+  .landing-hero { min-height: 610px; }
+  .hero-console { width: min(100%, 640px); }
+}
+
+@media (max-width: 900px) {
+  .section-heading,
+  .process-grid,
+  .evidence-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section-heading { gap: 22px; }
+  .process-grid,
+  .evidence-grid { gap: 38px; }
+  .pipeline-list,
+  .evidence-card { width: 100%; max-width: none; }
+
+  .signal-items {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 9px 24px;
+    padding-block: 18px;
+  }
+}
+
+@media (max-width: 760px) {
+  .landing-page .landing-container { width: calc(100% - 36px); }
+  .landing-hero { min-height: auto; padding-block: 58px 24px; }
+  .landing-section { padding-block: 62px; }
+  .metrics-grid > div { min-height: 104px; padding: 20px 0; }
+  .metrics-grid strong { font-size: 42px; }
+  .final-section { padding-block: 62px 70px; }
+  .final-card { padding: 58px 18px; }
+}
+
+@media (max-width: 420px) {
+  .landing-page .landing-container { width: calc(100% - 28px); }
+  .signal-items { column-gap: 14px; }
+}
+
 /* Calm page entrance: reveal the frame first, then let each content group
    settle into place without changing the layout's measured dimensions. */
 :root { --enter-ease: cubic-bezier(.22, 1, .36, 1); }

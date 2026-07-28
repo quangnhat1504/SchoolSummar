@@ -37,7 +37,7 @@ const normalizeChunk = (chunk, index) => ({
 
 export const normalizeDoclingResult = (raw, { fallbackText = '', filename = 'document.pdf' } = {}) => {
   const root = raw?.document || raw?.data?.document || raw?.output || raw?.data || raw || {}
-  const markdown = asText(raw?.markdown || raw?.data?.markdown || root.markdown || root.text || fallbackText)
+  const markdown = asText(raw?.markdown || raw?.data?.markdown || root.markdown || root.md_content || root.text_content || root.text || fallbackText)
   const rawPages = Array.isArray(root.pages) ? root.pages : Array.isArray(raw?.pages) ? raw.pages : []
   const rawBlocks = Array.isArray(root.layoutBlocks) ? root.layoutBlocks : Array.isArray(root.layout_blocks) ? root.layout_blocks : Array.isArray(raw?.layoutBlocks) ? raw.layoutBlocks : []
   const rawChunks = Array.isArray(root.chunks) ? root.chunks : Array.isArray(raw?.chunks) ? raw.chunks : []
@@ -58,24 +58,37 @@ const retryable = (error) => error?.retryable === true || ['ECONNRESET', 'ECONNR
 
 const fetchService = async (config, input) => {
   if (!config.doclingServiceUrl) throw new Error('DOCLING_SERVICE_URL is required when DOCLING_MODE=service')
+  if (!input.sourcePath) throw new Error('A local source file is required when DOCLING_MODE=service')
   const url = new URL(config.doclingServicePath || '/v1/convert', config.doclingServiceUrl).toString()
   const bytes = await readFile(input.sourcePath)
   const form = new FormData()
-  form.append('file', new Blob([bytes], { type: 'application/pdf' }), input.filename || 'document.pdf')
+  form.append('files', new Blob([bytes], { type: 'application/pdf' }), input.filename || 'document.pdf')
+  form.append('from_formats', 'pdf')
+  form.append('to_formats', 'json')
+  form.append('to_formats', 'md')
+  form.append('do_ocr', String(config.doclingOcr))
+  if (config.doclingTables) form.append('table_mode', 'accurate')
   form.append('pipeline', config.doclingPipeline)
-  form.append('ocr', String(config.doclingOcr))
-  form.append('tables', String(config.doclingTables))
   form.append('chunks_type', config.doclingChunksType)
-  form.append('max_num_pages', String(config.doclingMaxPages))
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), config.doclingTimeoutMs)
   try {
     const headers = { 'x-idempotency-key': input.sha256 || hashText(bytes) }
-    if (config.doclingServiceApiKey) headers.authorization = `Bearer ${config.doclingServiceApiKey}`
+    if (config.doclingServiceApiKey) headers['x-api-key'] = config.doclingServiceApiKey
     const response = await fetch(url, { method: 'POST', headers, body: form, signal: controller.signal })
     const body = await response.text()
     if (!response.ok) { const error = new Error(`Docling service returned HTTP ${response.status}: ${body.slice(0, 300)}`); error.retryable = response.status >= 500 || response.status === 429; throw error }
-    try { return JSON.parse(body) } catch { return { markdown: body } }
+    try {
+      const parsed = JSON.parse(body)
+      if (parsed.status === 'failure') throw new Error(`Docling conversion failed: ${(parsed.errors || []).join('; ') || 'unknown service error'}`)
+      return parsed
+    } catch (error) {
+      if (error instanceof SyntaxError) return { markdown: body }
+      throw error
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') error.retryable = true
+    throw error
   } finally { clearTimeout(timer) }
 }
 
@@ -83,7 +96,7 @@ const runCli = async (config, input) => {
   if (!input.sourcePath) throw new Error('A local source file is required when DOCLING_MODE=cli')
   const outputDir = await mkdtemp(join(tmpdir(), 'research-rag-docling-'))
   try {
-    const args = [input.sourcePath, '--to', 'json', '--output', outputDir, '--ocr', config.doclingOcr ? 'true' : 'false', '--tables', config.doclingTables ? 'true' : 'false', '--pipeline', config.doclingPipeline, '--max-num-pages', String(config.doclingMaxPages), '--max-file-size', String(config.doclingMaxFileSize)]
+    const args = ['convert', input.sourcePath, '--from', 'pdf', '--to', 'json', '--to', 'md', '--output', outputDir, config.doclingOcr ? '--ocr' : '--no-ocr', config.doclingTables ? '--tables' : '--no-tables', '--pipeline', config.doclingPipeline, '--chunks-type', config.doclingChunksType]
     const raw = await new Promise((resolve, reject) => {
       const child = spawn(config.doclingCli, args, { stdio: ['ignore', 'pipe', 'pipe'], shell: false })
       let stderr = ''; let stdout = ''

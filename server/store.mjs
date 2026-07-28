@@ -218,6 +218,35 @@ export class PostgresStore {
   }
   async attachFile(ownerId, paperId, file) { return this.withTx(ownerId, async (client) => { await client.query('INSERT INTO paper_files(owner_id,paper_id,file_type,object_key,mime_type,size_bytes,checksum) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(owner_id,paper_id,file_type) DO UPDATE SET object_key=EXCLUDED.object_key,mime_type=EXCLUDED.mime_type,size_bytes=EXCLUDED.size_bytes,checksum=EXCLUDED.checksum', [ownerId, paperId, 'original_pdf', file.objectKey, file.mimeType, file.sizeBytes, file.sha256]); await client.query('UPDATE papers SET metadata=metadata || $1::jsonb, updated_at=now() WHERE owner_id=$2 AND id=$3', [JSON.stringify({ objectKey: file.objectKey, fileName: file.fileName, sizeBytes: file.sizeBytes }), ownerId, paperId]); return file }) }
 
+  async persistDoclingResult(ownerId, paperId, runId, document) {
+    return this.withTx(ownerId, async (client) => {
+      const pageIds = new Map()
+      for (const page of document.pages) {
+        const result = await client.query('INSERT INTO paper_pages(owner_id,paper_id,processing_run_id,page_number,width,height,raw_image_object_key) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(owner_id,paper_id,processing_run_id,page_number) DO UPDATE SET width=EXCLUDED.width,height=EXCLUDED.height RETURNING id', [ownerId, paperId, runId, page.pageNumber, Math.max(1, page.width), Math.max(1, page.height), `users/${ownerId}/papers/${paperId}/runs/${runId}/pages/${String(page.pageNumber).padStart(4, '0')}/raw.webp`])
+        pageIds.set(page.pageNumber, result.rows[0].id)
+      }
+      const blockIds = new Map()
+      const typeMap = { text: 'paragraph', section_header: 'header', picture: 'figure', table: 'table', caption: 'caption', formula: 'equation', list_item: 'list', list: 'list', title: 'title', abstract: 'abstract' }
+      for (const [index, block] of document.layoutBlocks.entries()) {
+        const pageId = pageIds.get(block.pageNumber) || pageIds.get(1)
+        if (!pageId) continue
+        const bbox = block.bbox || {}
+        const x1 = Number(bbox.x1 ?? bbox.l ?? bbox.left ?? 0); const y1 = Number(bbox.y1 ?? bbox.t ?? bbox.top ?? 0); const x2 = Math.max(x1 + 1, Number(bbox.x2 ?? bbox.r ?? bbox.right ?? 1)); const y2 = Math.max(y1 + 1, Number(bbox.y2 ?? bbox.b ?? bbox.bottom ?? 1))
+        const result = await client.query('INSERT INTO layout_blocks(owner_id,paper_id,page_id,block_type,bbox_x1,bbox_y1,bbox_x2,bbox_y2,normalized_bbox,reading_order,confidence,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id', [ownerId, paperId, pageId, typeMap[block.type] || 'unknown', x1, y1, x2, y2, JSON.stringify({ x1, y1, x2, y2 }), Number(block.readingOrder ?? index), block.confidence, block.metadata || {}])
+        blockIds.set(block.id, result.rows[0].id)
+        if (block.text) await client.query('INSERT INTO ocr_results(owner_id,paper_id,layout_block_id,ocr_engine,text,language,confidence) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(owner_id,layout_block_id,ocr_engine) DO UPDATE SET text=EXCLUDED.text,confidence=EXCLUDED.confidence', [ownerId, paperId, result.rows[0].id, 'docling', block.text, null, block.confidence])
+      }
+      for (const [index, chunk] of document.chunks.entries()) {
+        const contentHash = sha(chunk.text)
+        const result = await client.query('INSERT INTO document_chunks(owner_id,paper_id,processing_run_id,chunk_index,text,token_count,page_start,page_end,content_hash,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(owner_id,processing_run_id,chunk_index) DO UPDATE SET text=EXCLUDED.text,token_count=EXCLUDED.token_count,page_start=EXCLUDED.page_start,page_end=EXCLUDED.page_end,content_hash=EXCLUDED.content_hash,metadata=EXCLUDED.metadata RETURNING id', [ownerId, paperId, runId, index, chunk.text, Math.max(1, chunk.text.split(/\s+/).length), Math.max(1, chunk.pageStart), Math.max(chunk.pageStart, chunk.pageEnd), contentHash, chunk.metadata || {}])
+        const chunkId = result.rows[0].id
+        for (const blockRef of chunk.blocks || []) { const layoutBlockId = blockIds.get(typeof blockRef === 'string' ? blockRef : blockRef.id); if (layoutBlockId) await client.query('INSERT INTO chunk_blocks(owner_id,paper_id,chunk_id,layout_block_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [ownerId, paperId, chunkId, layoutBlockId]) }
+      }
+      await client.query('UPDATE papers SET metadata=metadata || $1::jsonb, updated_at=now() WHERE owner_id=$2 AND id=$3', [JSON.stringify({ docling: { pages: document.pages.length, blocks: document.layoutBlocks.length, chunks: document.chunks.length, markdown: document.markdown } }), ownerId, paperId])
+      return document
+    })
+  }
+
   async createProcessingRun(ownerId, paperId) {
     return this.withTx(ownerId, async (client) => {
       const { rows } = await client.query('INSERT INTO processing_runs (owner_id,paper_id,pipeline_version,status) VALUES ($1,$2,$3,$4) RETURNING id,owner_id,paper_id,status,is_active,pipeline_version,created_at,updated_at', [ownerId, paperId, 'v1', 'queued'])

@@ -29,6 +29,20 @@ transaction and cannot leak between pooled connections.
   the answer.
 - Binary files remain in object storage; SQL stores keys and metadata only.
 
+## Docling worker
+
+PDF conversion is performed outside the Node process through the Docling
+adapter. Set `DOCLING_MODE=service` and `DOCLING_SERVICE_URL` for a Docling
+Serve deployment, or set `DOCLING_MODE=cli` when the Python `docling` command is
+installed on the worker host. The default `DOCLING_MODE=mock` is safe for a
+fresh local checkout and is covered by the integration tests.
+
+The normalized output maps to `paper_pages`, `layout_blocks`, `ocr_results`,
+`document_chunks`, and `chunk_blocks`. Keep raw page images and raw Docling/OCR
+JSON in object storage; do not place binary PDFs or large payloads in
+PostgreSQL. A run must only become active after Docling conversion and all
+downstream stages succeed.
+
 ## Embedding dimension
 
 The v1 schema uses `vector(1536)`. Select the production embedding model before

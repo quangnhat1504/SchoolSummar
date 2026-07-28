@@ -15,6 +15,7 @@ import { answerQuestion, streamAnswer } from './rag.mjs'
 import { processRun } from './processing.mjs'
 import { RealtimeHub } from './realtime.mjs'
 import { createDoclingAdapter } from './docling.mjs'
+import { createLlmRouter } from './llm.mjs'
 
 const jsonHeaders = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
 const paperInput = z.object({ title: z.string().trim().min(1).max(500).optional(), authors: z.array(z.string().trim().min(1).max(200)).max(100).default([]), doi: z.string().trim().max(300).optional(), source: z.string().trim().max(100).optional(), sha256: z.string().regex(/^[0-9a-f]{64}$/i), metadata: z.record(z.any()).optional() })
@@ -28,12 +29,12 @@ const publicPaper = (paper) => ({ ...paper, status: paper.status === 'uploaded' 
 
 const startProcessing = (store, hub, identity, result, logger, docling, input = {}) => { void processRun({ store, hub, ownerId: identity.userId, run: result.run, jobs: result.jobs, logger, docling, ...input }) }
 
-const queueChat = async ({ store, hub, identity, sessionId, userMessage, question, scope, config, logger }) => {
+const queueChat = async ({ store, hub, identity, sessionId, userMessage, question, scope, config, llm, logger }) => {
   hub.publish(identity.userId, 'chat.message.created', { sessionId, message: userMessage })
   try {
     hub.publish(identity.userId, 'chat.started', { sessionId, messageId: userMessage.id })
-    const answer = await answerQuestion(config, store, identity.userId, question, scope)
-    const assistant = await store.addMessage(identity.userId, sessionId, { role: 'assistant', content: answer.text, model: answer.mode, metadata: { retrievalMode: answer.mode, sourceCount: answer.sources.length } })
+    const answer = await answerQuestion(config, store, identity.userId, question, scope, llm)
+    const assistant = await store.addMessage(identity.userId, sessionId, { role: 'assistant', content: answer.text, model: answer.provider ? `${answer.provider}:${answer.model}` : answer.mode, metadata: { retrievalMode: answer.mode, sourceCount: answer.sources.length, provider: answer.provider, model: answer.model } })
     if (answer.sources.length) await store.addCitations(identity.userId, assistant.id, answer.sources)
     await streamAnswer(answer, async (delta) => hub.publish(identity.userId, 'chat.delta', { sessionId, messageId: assistant.id, delta }))
     hub.publish(identity.userId, 'chat.completed', { sessionId, message: { ...assistant, citations: answer.sources } })
@@ -49,6 +50,7 @@ export const createApp = (overrides = {}) => {
   const store = overrides.store || createStore(config, logger)
   const objectStore = overrides.objectStore || createObjectStore(config)
   const docling = overrides.docling || createDoclingAdapter(config, logger)
+  const llm = overrides.llm || createLlmRouter(config, logger)
   const hub = overrides.hub || new RealtimeHub({ authenticate: (request, url) => getRequestIdentity(request, config, url), logger })
 
   const server = createServer(async (request, response) => {
@@ -57,8 +59,9 @@ export const createApp = (overrides = {}) => {
       response.setHeader('x-request-id', requestId)
     try {
       if (requestUrl.pathname.startsWith('/api/')) {
-        if (request.method === 'GET' && requestUrl.pathname === '/api/health') return sendJson(response, 200, { ok: true, service: config.appName, version: '1.0.0', mode: store.kind, realtime: true })
-        if (request.method === 'GET' && requestUrl.pathname === '/api/ready') { const readiness = await store.health(); return sendJson(response, readiness.ok ? 200 : 503, { ...readiness, service: config.appName }) }
+        if (request.method === 'GET' && requestUrl.pathname === '/api/health') return sendJson(response, 200, { ok: true, service: config.appName, version: '1.0.0', mode: store.kind, realtime: true, llm: llm.health() })
+        if (request.method === 'GET' && requestUrl.pathname === '/api/ready') { const readiness = await store.health(); return sendJson(response, readiness.ok ? 200 : 503, { ...readiness, service: config.appName, llm: llm.health() }) }
+        if (request.method === 'GET' && requestUrl.pathname === '/api/v1/llm/health') return sendJson(response, 200, { ok: true, data: llm.health() })
         const identity = getRequestIdentity(request, config, requestUrl)
         await store.ensureIdentity(identity)
         const parts = pathParts(requestUrl.pathname)
@@ -81,7 +84,7 @@ export const createApp = (overrides = {}) => {
         if (method === 'GET' && requestUrl.pathname === '/api/v1/sessions') return sendJson(response, 200, { ok: true, data: await store.listSessions(identity.userId) })
         if (method === 'POST' && requestUrl.pathname === '/api/v1/sessions') { const body = await readJson(request, config.maxJsonBytes); const session = await store.createSession(identity.userId, typeof body.title === 'string' ? body.title : null); return sendJson(response, 201, { ok: true, data: session }) }
         if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'GET') return sendJson(response, 200, { ok: true, data: await store.listMessages(identity.userId, parts[3]) })
-        if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'POST') { const body = messageInput.parse(await readJson(request, config.maxJsonBytes)); const userMessage = await store.addMessage(identity.userId, parts[3], { role: 'user', content: body.content }); void queueChat({ store, hub, identity, sessionId: parts[3], userMessage, question: body.content, scope: body.scope, config, logger }); return sendJson(response, 202, { ok: true, data: { message: userMessage, status: 'queued' } }) }
+        if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'POST') { const body = messageInput.parse(await readJson(request, config.maxJsonBytes)); const userMessage = await store.addMessage(identity.userId, parts[3], { role: 'user', content: body.content }); void queueChat({ store, hub, identity, sessionId: parts[3], userMessage, question: body.content, scope: body.scope, config, llm, logger }); return sendJson(response, 202, { ok: true, data: { message: userMessage, status: 'queued' } }) }
         if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'files' && parts[3] && method === 'GET' && objectStore.kind === 'local') { const objectKey = decodeURIComponent(parts.slice(3).join('/')); const filePath = join(config.localStorageDir, objectKey); try { const metadata = await stat(filePath); response.writeHead(200, { 'content-type': 'application/pdf', 'content-length': metadata.size, 'cache-control': 'private, max-age=60' }); return objectStore.stream(objectKey).pipe(response) } catch { throw notFound('File not found') } }
         return sendJson(response, 404, errorPayload(notFound('API route not found'), requestId), { 'cache-control': 'no-store' })
       }
@@ -101,5 +104,5 @@ export const createApp = (overrides = {}) => {
   })
 
   hub.attach(server)
-  return { config, server, store, objectStore, hub, logger }
+  return { config, server, store, objectStore, hub, llm, logger }
 }
