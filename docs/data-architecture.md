@@ -35,6 +35,30 @@ trusted database role or explicitly set the relevant user identity.
 Do not use a pooled connection without setting the value transaction-locally;
 the third argument to `set_config` must remain `true`.
 
+### Authentication and session boundaries
+
+The local auth adapter exposes:
+
+```text
+POST /api/v1/auth/register  { email, password, displayName? }
+POST /api/v1/auth/login     { email, password }
+GET  /api/v1/auth/me
+POST /api/v1/auth/logout
+```
+
+Successful registration/login returns a user-safe profile and sets an
+HttpOnly, SameSite=Lax `research_session` cookie. Passwords are stored as
+scrypt hashes; the server stores only a SHA-256 hash of the opaque session
+token in `auth_sessions`, with expiry and revocation support. Production must
+set `AUTH_SESSION_SECRET` and `AUTH_REQUIRED=true`.
+
+Every authenticated request resolves the cookie to a user before calling the
+store. Papers, processing runs, files, chat sessions, messages, and citations
+are filtered by that user. A chat session also carries `project_key`, so the
+sidebar can retrieve only the conversations for the selected project. The
+database migration adds a unique normalized email index and the session table;
+the memory store implements the same ownership contract for local tests.
+
 ## Pipeline contract
 
 1. Insert `papers` and `paper_files` after upload.

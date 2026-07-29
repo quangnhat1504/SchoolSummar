@@ -1,5 +1,6 @@
 .env
 .env.*
+*.env
 !.env.sample
 
 # Local development artifacts

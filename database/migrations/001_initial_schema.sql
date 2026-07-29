@@ -33,6 +33,7 @@ CREATE TABLE users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   auth_subject text NOT NULL UNIQUE,
   email text,
+  password_hash text,
   display_name text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -300,11 +301,30 @@ CREATE UNIQUE INDEX one_active_embedding_per_chunk
 CREATE TABLE chat_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  project_key text NOT NULL DEFAULT 'memory-cognition',
   title text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (owner_id, id)
 );
+
+CREATE UNIQUE INDEX users_email_uq
+  ON users (lower(email))
+  WHERE email IS NOT NULL;
+
+CREATE TABLE auth_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL,
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX auth_sessions_user_idx ON auth_sessions (user_id, created_at DESC);
+CREATE INDEX auth_sessions_expiry_idx ON auth_sessions (expires_at)
+  WHERE revoked_at IS NULL;
 
 CREATE TABLE chat_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
