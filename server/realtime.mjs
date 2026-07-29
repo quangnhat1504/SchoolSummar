@@ -9,7 +9,7 @@ export class RealtimeHub {
   }
 
   attach(server) {
-    server.on('upgrade', (request, socket, head) => {
+    server.on('upgrade', async (request, socket, head) => {
       const url = new URL(request.url || '/', 'http://localhost')
       if (url.pathname !== '/realtime') {
         socket.destroy()
@@ -17,7 +17,7 @@ export class RealtimeHub {
       }
       let identity
       try {
-        identity = this.authenticate(request, url)
+        identity = await this.authenticate(request, url)
       } catch {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()

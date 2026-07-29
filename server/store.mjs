@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import pg from 'pg'
 import { randomUUID } from 'node:crypto'
 import { conflict, notFound } from './errors.mjs'
+import { normalizeEmail } from './auth.mjs'
 
 const { Pool } = pg
 const now = () => new Date().toISOString()
@@ -60,12 +61,13 @@ export class MemoryStore {
     this.sessions = new Map()
     this.messages = new Map()
     this.citations = new Map()
+    this.authSessions = new Map()
     this.ensureUser({ userId: demoUserId, subject: 'demo-local-user' })
     for (const seed of demoPapers) this.seedPaper(seed)
   }
 
   ensureUser(identity) {
-    if (!this.users.has(identity.userId)) this.users.set(identity.userId, { id: identity.userId, authSubject: identity.subject, displayName: 'Avery Kim' })
+    if (!this.users.has(identity.userId)) this.users.set(identity.userId, { id: identity.userId, authSubject: identity.subject, displayName: 'Avery Kim', email: null, passwordHash: null })
   }
 
   seedPaper(seed) {
@@ -80,6 +82,23 @@ export class MemoryStore {
   async health() { return { ok: true, mode: this.kind } }
   async close() {}
   async ensureIdentity(identity) { this.ensureUser(identity) }
+
+  async createAuthUser({ email, displayName, passwordHash }) {
+    const normalized = normalizeEmail(email)
+    if ([...this.users.values()].some((user) => user.email === normalized)) throw conflict('An account with this email already exists')
+    const user = { id: randomUUID(), authSubject: randomUUID(), email: normalized, displayName: displayName || normalized.split('@')[0], passwordHash }
+    this.users.set(user.id, user)
+    return { id: user.id, email: user.email, displayName: user.displayName }
+  }
+  async findAuthUser(email) { return [...this.users.values()].find((user) => user.email === normalizeEmail(email) && user.passwordHash) || null }
+  async createAuthSession({ id, userId, tokenHash, expiresAt }) { this.authSessions.set(id, { id, userId, tokenHash, expiresAt }); return { id, userId, expiresAt } }
+  async getAuthSession(id, tokenHash) {
+    const session = this.authSessions.get(id)
+    if (!session || session.tokenHash !== tokenHash || new Date(session.expiresAt).getTime() <= Date.now()) return null
+    const user = this.users.get(session.userId)
+    return user ? { session, user: { id: user.id, email: user.email, displayName: user.displayName, subject: user.authSubject } } : null
+  }
+  async revokeAuthSession(id, tokenHash) { const session = this.authSessions.get(id); if (session?.tokenHash === tokenHash) this.authSessions.delete(id) }
 
   async listPapers(ownerId, { q = '', status = '', limit = 50, cursor = '' } = {}) {
     const query = q.trim().toLowerCase()
@@ -107,6 +126,12 @@ export class MemoryStore {
     const paper = { id, ownerId, ...input, status: 'uploaded', createdAt, updatedAt: createdAt, metadata: input.metadata || {} }
     this.papers.set(id, paper)
     return normalizePaper(paper)
+  }
+  async deletePaper(ownerId, paperId) {
+    const paper = this.papers.get(paperId)
+    if (!paper || paper.ownerId !== ownerId || paper.status === 'deleted') throw notFound('Paper not found')
+    paper.status = 'deleted'; paper.updatedAt = now()
+    return { id: paperId, deleted: true }
   }
   async attachFile(ownerId, paperId, file) { const paper = this.papers.get(paperId); if (!paper || paper.ownerId !== ownerId) throw notFound('Paper not found'); paper.metadata = { ...paper.metadata, objectKey: file.objectKey, fileName: file.fileName, mimeType: file.mimeType, sizeBytes: file.sizeBytes }; paper.updatedAt = now(); return paper }
   async persistDoclingResult(ownerId, paperId, runId, document) {
@@ -154,11 +179,11 @@ export class MemoryStore {
     return runs.map((run) => ({ ...run, paper: normalizePaper(this.papers.get(run.paperId)), jobs: [...this.jobs.values()].filter((job) => job.processingRunId === run.id) }))
   }
 
-  async createSession(ownerId, title = null) { const id = randomUUID(); const createdAt = now(); const session = { id, ownerId, title: title || 'New research thread', createdAt, updatedAt: createdAt }; this.sessions.set(id, session); return session }
-  async listSessions(ownerId) { return [...this.sessions.values()].filter((session) => session.ownerId === ownerId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) }
+  async createSession(ownerId, title = null, project = null) { const id = randomUUID(); const createdAt = now(); const session = { id, ownerId, project: project || 'memory-cognition', title: title || 'New research thread', createdAt, updatedAt: createdAt }; this.sessions.set(id, session); return session }
+  async listSessions(ownerId, { project = '' } = {}) { return [...this.sessions.values()].filter((session) => session.ownerId === ownerId && (!project || session.project === project)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) }
   async getSession(ownerId, sessionId) { const session = this.sessions.get(sessionId); if (!session || session.ownerId !== ownerId) throw notFound('Chat session not found'); return session }
   async listMessages(ownerId, sessionId) { await this.getSession(ownerId, sessionId); return [...this.messages.values()].filter((message) => message.ownerId === ownerId && message.sessionId === sessionId).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((message) => ({ ...message, citations: this.citations.get(message.id) || [] })) }
-  async addMessage(ownerId, sessionId, input) { const session = await this.getSession(ownerId, sessionId); const message = { id: randomUUID(), ownerId, sessionId, role: input.role, content: input.content, model: input.model || null, metadata: input.metadata || {}, createdAt: now() }; this.messages.set(message.id, message); session.updatedAt = now(); return message }
+  async addMessage(ownerId, sessionId, input) { const session = await this.getSession(ownerId, sessionId); const message = { id: randomUUID(), ownerId, sessionId, role: input.role, content: input.content, model: input.model || null, metadata: input.metadata || {}, createdAt: now() }; this.messages.set(message.id, message); if (input.role === 'user' && session.title === 'New research thread') session.title = input.content.slice(0, 80); session.updatedAt = now(); return message }
   async addCitations(ownerId, messageId, sources) { const citations = sources.map((source, rank) => ({ id: randomUUID(), ownerId, messageId, paperId: source.paperId, processingRunId: source.processingRunId, chunkId: source.chunkId || null, pageNumber: source.pageStart || 1, quote: source.text, retrievalScore: source.score, rank })); this.citations.set(messageId, citations); return citations }
   async searchChunks(ownerId, query, { paperId, limit = 8 } = {}) {
     const words = query.toLowerCase().split(/\W+/).filter((word) => word.length > 2)
@@ -188,7 +213,22 @@ export class PostgresStore {
   }
   async health() { await this.pool.query('SELECT 1'); return { ok: true, mode: this.kind } }
   async close() { await this.pool.end() }
-  async ensureIdentity(identity) { await this.withTx(identity.userId, (client) => client.query('INSERT INTO users (id, auth_subject, display_name) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET auth_subject = EXCLUDED.auth_subject', [identity.userId, identity.subject, 'Avery Kim'])) }
+  async ensureIdentity(identity) { await this.withTx(identity.userId, (client) => client.query('INSERT INTO users (id, auth_subject, email, display_name) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET email = COALESCE(EXCLUDED.email, users.email), display_name = COALESCE(EXCLUDED.display_name, users.display_name)', [identity.userId, identity.subject, identity.email || null, identity.displayName || 'Researcher'])) }
+
+  async createAuthUser({ email, displayName, passwordHash }) {
+    const normalized = normalizeEmail(email)
+    try {
+      const { rows } = await this.pool.query('INSERT INTO users (auth_subject,email,display_name,password_hash) VALUES ($1,$2,$3,$4) RETURNING id,email,display_name', [randomUUID(), normalized, displayName || normalized.split('@')[0], passwordHash])
+      return { id: rows[0].id, email: rows[0].email, displayName: rows[0].display_name }
+    } catch (error) {
+      if (error?.code === '23505') throw conflict('An account with this email already exists')
+      throw error
+    }
+  }
+  async findAuthUser(email) { const { rows } = await this.pool.query('SELECT id,email,display_name,password_hash FROM users WHERE lower(email)=lower($1) AND password_hash IS NOT NULL', [normalizeEmail(email)]); return rows[0] ? { id: rows[0].id, email: rows[0].email, displayName: rows[0].display_name, passwordHash: rows[0].password_hash } : null }
+  async createAuthSession({ id, userId, tokenHash, expiresAt }) { await this.pool.query('INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,$4)', [id, userId, tokenHash, expiresAt]); return { id, userId, expiresAt } }
+  async getAuthSession(id, tokenHash) { const { rows } = await this.pool.query('SELECT s.id,s.user_id,s.expires_at,u.auth_subject,u.email,u.display_name FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.token_hash=$2 AND s.revoked_at IS NULL AND s.expires_at > now()', [id, tokenHash]); if (!rows[0]) return null; await this.pool.query('UPDATE auth_sessions SET last_seen_at=now() WHERE id=$1', [id]); return { session: { id: rows[0].id, userId: rows[0].user_id, expiresAt: rows[0].expires_at }, user: { id: rows[0].user_id, email: rows[0].email, displayName: rows[0].display_name, subject: rows[0].auth_subject } } }
+  async revokeAuthSession(id, tokenHash) { await this.pool.query('UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND token_hash=$2', [id, tokenHash]) }
 
   async listPapers(ownerId, { q = '', status = '', limit = 50, cursor = '' } = {}) {
     const values = [ownerId]; const where = ['p.owner_id = $1', "p.status <> 'deleted'"]
@@ -215,6 +255,11 @@ export class PostgresStore {
       const { rows } = await client.query('INSERT INTO papers (owner_id, title, authors, doi, source, sha256, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,title,authors,doi,source,status,metadata,created_at,updated_at', [ownerId, input.title || null, JSON.stringify(input.authors || []), input.doi || null, input.source || null, input.sha256, input.metadata || {}])
       return normalizePaper({ ...rows[0], createdAt: rows[0].created_at.toISOString(), updatedAt: rows[0].updated_at.toISOString() })
     })
+  }
+  async deletePaper(ownerId, paperId) {
+    const { rows } = await this.pool.query('UPDATE papers SET status=$1, updated_at=now() WHERE owner_id=$2 AND id=$3 AND status<>$4 RETURNING id', ['deleted', ownerId, paperId, 'deleted'])
+    if (!rows[0]) throw notFound('Paper not found')
+    return { id: paperId, deleted: true }
   }
   async attachFile(ownerId, paperId, file) { return this.withTx(ownerId, async (client) => { await client.query('INSERT INTO paper_files(owner_id,paper_id,file_type,object_key,mime_type,size_bytes,checksum) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(owner_id,paper_id,file_type) DO UPDATE SET object_key=EXCLUDED.object_key,mime_type=EXCLUDED.mime_type,size_bytes=EXCLUDED.size_bytes,checksum=EXCLUDED.checksum', [ownerId, paperId, 'original_pdf', file.objectKey, file.mimeType, file.sizeBytes, file.sha256]); await client.query('UPDATE papers SET metadata=metadata || $1::jsonb, updated_at=now() WHERE owner_id=$2 AND id=$3', [JSON.stringify({ objectKey: file.objectKey, fileName: file.fileName, sizeBytes: file.sizeBytes }), ownerId, paperId]); return file }) }
 
@@ -260,11 +305,11 @@ export class PostgresStore {
   async setRunStatus(ownerId, runId, status, isActive = false) { return this.withTx(ownerId, async (client) => { const { rows } = await client.query('UPDATE processing_runs SET status=$1,is_active=$2,started_at=CASE WHEN $1=$3 AND started_at IS NULL THEN now() ELSE started_at END,completed_at=CASE WHEN $1 IN ($4,$5,$6) THEN now() ELSE completed_at END WHERE owner_id=$7 AND id=$8 RETURNING *', [status, isActive, 'running', 'succeeded', 'failed', 'cancelled', ownerId, runId]); if (!rows[0]) throw notFound('Processing run not found'); if (status === 'succeeded') await client.query('UPDATE papers SET status=$1 WHERE owner_id=$2 AND id=$3', ['ready', ownerId, rows[0].paper_id]); return rows[0] }) }
   async setJobStatus(ownerId, jobId, status) { return this.withTx(ownerId, async (client) => { const { rows } = await client.query('UPDATE pipeline_jobs SET status=$1,attempts=attempts+CASE WHEN $1=$2 THEN 1 ELSE 0 END,started_at=CASE WHEN $1=$2 THEN now() ELSE started_at END,completed_at=CASE WHEN $1 IN ($3,$4,$5) THEN now() ELSE completed_at END WHERE owner_id=$6 AND id=$7 RETURNING *', [status, 'running', 'succeeded', 'failed', 'cancelled', ownerId, jobId]); if (!rows[0]) throw notFound('Pipeline job not found'); return rows[0] }) }
   async listProcessing(ownerId) { const { rows } = await this.pool.query('SELECT r.*, p.title, p.authors, p.status AS paper_status FROM processing_runs r JOIN papers p ON p.owner_id=r.owner_id AND p.id=r.paper_id WHERE r.owner_id=$1 ORDER BY r.created_at DESC', [ownerId]); return Promise.all(rows.map(async (run) => ({ ...run, jobs: (await this.pool.query('SELECT * FROM pipeline_jobs WHERE owner_id=$1 AND processing_run_id=$2 ORDER BY created_at', [ownerId, run.id])).rows }))) }
-  async createSession(ownerId, title = null) { const { rows } = await this.pool.query('INSERT INTO chat_sessions(owner_id,title) VALUES($1,$2) RETURNING *', [ownerId, title || 'New research thread']); return rows[0] }
-  async listSessions(ownerId) { return (await this.pool.query('SELECT id,title,created_at,updated_at FROM chat_sessions WHERE owner_id=$1 ORDER BY updated_at DESC LIMIT 100', [ownerId])).rows }
+  async createSession(ownerId, title = null, project = null) { const { rows } = await this.pool.query('INSERT INTO chat_sessions(owner_id,project_key,title) VALUES($1,$2,$3) RETURNING id,owner_id,project_key AS project,title,created_at,updated_at', [ownerId, project || 'memory-cognition', title || 'New research thread']); return rows[0] }
+  async listSessions(ownerId, { project = '' } = {}) { const values = [ownerId]; const where = ['owner_id=$1']; if (project) { values.push(project); where.push(`project_key=$${values.length}`) } values.push(100); return (await this.pool.query(`SELECT id,owner_id,project_key AS project,title,created_at,updated_at FROM chat_sessions WHERE ${where.join(' AND ')} ORDER BY updated_at DESC LIMIT $${values.length}`, values)).rows }
   async getSession(ownerId, sessionId) { const { rows } = await this.pool.query('SELECT id,owner_id,title,created_at,updated_at FROM chat_sessions WHERE owner_id=$1 AND id=$2', [ownerId, sessionId]); if (!rows[0]) throw notFound('Chat session not found'); return rows[0] }
   async listMessages(ownerId, sessionId) { await this.getSession(ownerId, sessionId); const { rows } = await this.pool.query('SELECT m.id,m.session_id,m.role,m.content,m.model,m.metadata,m.created_at,COALESCE((SELECT json_agg(c ORDER BY c.rank) FROM message_citations c WHERE c.owner_id=m.owner_id AND c.message_id=m.id),\'[]\'::json) citations FROM chat_messages m WHERE m.owner_id=$1 AND m.session_id=$2 ORDER BY m.created_at,m.id', [ownerId, sessionId]); return rows }
-  async addMessage(ownerId, sessionId, input) { await this.getSession(ownerId, sessionId); const { rows } = await this.pool.query('INSERT INTO chat_messages(owner_id,session_id,role,content,model,metadata) VALUES($1,$2,$3,$4,$5,$6) RETURNING *', [ownerId, sessionId, input.role, input.content, input.model || null, input.metadata || {}]); return rows[0] }
+  async addMessage(ownerId, sessionId, input) { await this.getSession(ownerId, sessionId); const { rows } = await this.pool.query('INSERT INTO chat_messages(owner_id,session_id,role,content,model,metadata) VALUES($1,$2,$3,$4,$5,$6) RETURNING *', [ownerId, sessionId, input.role, input.content, input.model || null, input.metadata || {}]); if (input.role === 'user') await this.pool.query('UPDATE chat_sessions SET title=CASE WHEN title=$1 THEN left($2,80) ELSE title END,updated_at=now() WHERE owner_id=$3 AND id=$4', ['New research thread', input.content, ownerId, sessionId]); return rows[0] }
   async addCitations(ownerId, messageId, sources) { const rows = []; for (const [rank, source] of sources.entries()) { const result = await this.pool.query('INSERT INTO message_citations(owner_id,message_id,paper_id,processing_run_id,chunk_id,page_number,quote,retrieval_score,rank) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *', [ownerId, messageId, source.paperId, source.processingRunId, source.chunkId || null, source.pageStart || 1, source.text, source.score, rank]); rows.push(result.rows[0]) } return rows }
   async searchChunks(ownerId, query, { paperId, limit = 8 } = {}) { const values = [ownerId, query]; const scope = paperId ? 'AND c.paper_id = $3' : ''; if (paperId) values.push(paperId); values.push(limit); const result = await this.pool.query(`SELECT c.id AS chunk_id,c.paper_id,c.processing_run_id,c.text,c.page_start,c.page_end,p.title,ts_rank_cd(c.search_vector, plainto_tsquery('simple',$2)) AS score FROM document_chunks c JOIN papers p ON p.owner_id=c.owner_id AND p.id=c.paper_id JOIN processing_runs r ON r.owner_id=c.owner_id AND r.id=c.processing_run_id AND r.is_active=true WHERE c.owner_id=$1 ${scope} AND (c.search_vector @@ plainto_tsquery('simple',$2) OR c.text ILIKE '%' || $2 || '%') ORDER BY score DESC,c.chunk_index LIMIT $${values.length}`, values); return result.rows.map((row) => ({ paperId: row.paper_id, processingRunId: row.processing_run_id, chunkId: row.chunk_id, title: row.title, text: row.text, pageStart: row.page_start, pageEnd: row.page_end, score: Number(row.score) })) }
 }

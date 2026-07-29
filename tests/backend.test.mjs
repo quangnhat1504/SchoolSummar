@@ -38,6 +38,14 @@ const json = async (base, path, init) => {
   return body.data
 }
 
+const requestJson = async (base, path, { cookie = '', ...init } = {}) => {
+  const response = await fetch(`${base}${path}`, { ...init, headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers || {}) } })
+  const body = await response.json()
+  return { response, body }
+}
+
+const sessionCookieFrom = (response) => response.headers.get('set-cookie')?.split(';')[0] || ''
+
 test('Docling result normalization produces RAG-ready pages, blocks and chunks', () => {
   const result = normalizeDoclingResult({ markdown: '# Title\n\nA paragraph.', pages: [{ page_number: 2 }], layout_blocks: [{ id: 'b1', page_number: 2, type: 'paragraph', text: 'A paragraph.' }] })
   assert.equal(result.pages[0].pageNumber, 2)
@@ -82,6 +90,85 @@ test('API serves SPA, accepts PDF upload, runs Docling and streams chat realtime
   const paper = await json(runtime.base, `/api/v1/papers/${paperId}`)
   assert.equal(paper.status, 'Ready')
   assert.ok(paper.metadata.docling.chunks >= 1)
+})
+
+test('PDF upload tolerates browser octet-stream metadata but rejects spoofed files', async (t) => {
+  const runtime = await start()
+  t.after(runtime.close)
+
+  const octetPdf = Buffer.from('%PDF-1.4\n% octet-stream browser upload\n%%EOF')
+  const octetForm = new FormData()
+  octetForm.append('file', new Blob([octetPdf], { type: 'application/octet-stream' }), 'browser-export.pdf')
+  const accepted = await fetch(`${runtime.base}/api/v1/papers/upload`, { method: 'POST', body: octetForm })
+  assert.equal(accepted.status, 202, await accepted.text())
+
+  const fakeForm = new FormData()
+  fakeForm.append('file', new Blob(['not a pdf'], { type: 'application/pdf' }), 'fake.pdf')
+  const rejected = await fetch(`${runtime.base}/api/v1/papers/upload`, { method: 'POST', body: fakeForm })
+  assert.equal(rejected.status, 400, await rejected.text())
+
+  const papersResponse = await fetch(`${runtime.base}/api/v1/papers`)
+  const papersBody = await papersResponse.json()
+  assert.equal(papersBody.data.items.length, 5)
+})
+
+test('Authentication creates isolated users and persists/retrieves project chats', async (t) => {
+  const runtime = await start({ authRequired: true, authSessionSecret: 'test-auth-secret' })
+  t.after(runtime.close)
+
+  const registeredA = await requestJson(runtime.base, '/api/v1/auth/register', { method: 'POST', body: JSON.stringify({ email: 'ada@example.com', displayName: 'Ada Lovelace', password: 'abcde' }) })
+  assert.equal(registeredA.response.status, 201, JSON.stringify(registeredA.body))
+  const cookieA = sessionCookieFrom(registeredA.response)
+  assert.match(cookieA, /^research_session=/)
+  assert.equal(registeredA.body.data.user.email, 'ada@example.com')
+
+  const tooShort = await requestJson(runtime.base, '/api/v1/auth/register', { method: 'POST', body: JSON.stringify({ email: 'short@example.com', password: 'abcd' }) })
+  assert.equal(tooShort.response.status, 400)
+
+  const meA = await requestJson(runtime.base, '/api/v1/auth/me', { cookie: cookieA })
+  assert.equal(meA.response.status, 200)
+  assert.equal(meA.body.data.user.displayName, 'Ada Lovelace')
+
+  const createdSession = await requestJson(runtime.base, '/api/v1/sessions', { method: 'POST', cookie: cookieA, body: JSON.stringify({ title: 'Memory mechanisms', project: 'memory-cognition' }) })
+  assert.equal(createdSession.response.status, 201)
+  const sessionId = createdSession.body.data.id
+  const message = await requestJson(runtime.base, `/api/v1/sessions/${sessionId}/messages`, { method: 'POST', cookie: cookieA, body: JSON.stringify({ content: 'What mechanisms support consolidation?' }) })
+  assert.equal(message.response.status, 202)
+  const paperA = await requestJson(runtime.base, '/api/v1/papers', { method: 'POST', cookie: cookieA, body: JSON.stringify({ title: 'Ada private paper', authors: ['A. Lovelace'], sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', metadata: { collection: 'memory-cognition' } }) })
+  assert.equal(paperA.response.status, 202)
+  const papersA = await requestJson(runtime.base, '/api/v1/papers', { cookie: cookieA })
+  assert.equal(papersA.response.status, 200)
+  assert.equal(papersA.body.data.items.length, 1)
+
+  const sessionsA = await requestJson(runtime.base, '/api/v1/sessions?project=memory-cognition', { cookie: cookieA })
+  assert.equal(sessionsA.response.status, 200)
+  assert.equal(sessionsA.body.data.length, 1)
+  assert.equal(sessionsA.body.data[0].title, 'Memory mechanisms')
+  const messagesA = await requestJson(runtime.base, `/api/v1/sessions/${sessionId}/messages`, { cookie: cookieA })
+  assert.equal(messagesA.response.status, 200)
+  assert.equal(messagesA.body.data[0].content, 'What mechanisms support consolidation?')
+
+  const registeredB = await requestJson(runtime.base, '/api/v1/auth/register', { method: 'POST', body: JSON.stringify({ email: 'grace@example.com', displayName: 'Grace Hopper', password: 'another secure password' }) })
+  assert.equal(registeredB.response.status, 201)
+  const cookieB = sessionCookieFrom(registeredB.response)
+  const sessionsB = await requestJson(runtime.base, '/api/v1/sessions', { cookie: cookieB })
+  assert.equal(sessionsB.response.status, 200)
+  assert.equal(sessionsB.body.data.length, 0)
+  const papersB = await requestJson(runtime.base, '/api/v1/papers', { cookie: cookieB })
+  assert.equal(papersB.response.status, 200)
+  assert.equal(papersB.body.data.items.length, 0)
+  const crossUserMessages = await requestJson(runtime.base, `/api/v1/sessions/${sessionId}/messages`, { cookie: cookieB })
+  assert.equal(crossUserMessages.response.status, 404)
+
+  const duplicate = await requestJson(runtime.base, '/api/v1/auth/register', { method: 'POST', body: JSON.stringify({ email: 'ADA@example.com', password: 'another secure password' }) })
+  assert.equal(duplicate.response.status, 409)
+  const badLogin = await requestJson(runtime.base, '/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'ada@example.com', password: 'wrong-password' }) })
+  assert.equal(badLogin.response.status, 401)
+
+  const logout = await requestJson(runtime.base, '/api/v1/auth/logout', { method: 'POST', cookie: cookieA })
+  assert.equal(logout.response.status, 200)
+  const revokedMe = await requestJson(runtime.base, '/api/v1/auth/me', { cookie: cookieA })
+  assert.equal(revokedMe.response.status, 401)
 })
 
 test('Docling service mode posts multipart input and normalizes response', async (t) => {

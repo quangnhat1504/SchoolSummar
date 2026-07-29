@@ -5,6 +5,9 @@ const asInt = (value, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+const authSessionSecret = process.env.AUTH_SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'research-rag-development-session-secret-change-me')
+if (!authSessionSecret) throw new Error('AUTH_SESSION_SECRET must be configured in production')
+
 export const config = {
   appName: process.env.APP_NAME || 'research-rag',
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -15,6 +18,8 @@ export const config = {
   databaseSsl: process.env.DATABASE_SSL !== 'false',
   storeMode: process.env.STORE_MODE || 'auto',
   authRequired: process.env.AUTH_REQUIRED === 'true' || process.env.NODE_ENV === 'production',
+  authSessionSecret,
+  authSessionTtlSeconds: asInt(process.env.AUTH_SESSION_TTL_SECONDS, 60 * 60 * 24 * 30),
   demoUserId: process.env.DEMO_USER_ID || '00000000-0000-4000-8000-000000000001',
   maxJsonBytes: asInt(process.env.MAX_JSON_BYTES, 1_000_000),
   maxUploadBytes: asInt(process.env.MAX_UPLOAD_BYTES, 50 * 1024 * 1024),
