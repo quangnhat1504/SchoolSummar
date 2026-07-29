@@ -13,3 +13,10 @@ coverage/
 __pycache__/
 storage/
 .runtime/
+
+# Local research and benchmark workspace
+data/raw/
+data/processed/
+benchmark/artifacts/
+benchmark/checkpoints/
+benchmark/predictions/

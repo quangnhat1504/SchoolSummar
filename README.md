@@ -1,30 +1,132 @@
-# Research RAG
+<div align="center">
 
-Research RAG turns research PDFs into a searchable, explainable workspace:
+# RAG Research
 
-```text
-PDF upload → layout detection / OCR → chunks → retrieval → cited answer
+### Make every paper work harder.
+
+Turn dense research PDFs into a searchable workspace with grounded answers,
+inspectable evidence, and conversations that keep their context.
+
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=0B1F33)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-API-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![RAG](https://img.shields.io/badge/Answers-Grounded-6554DF)](#how-it-works)
+
+**Private by default · Page-level citations · Built for researchers**
+
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Architecture](#architecture) · [Team](#team)
+
+</div>
+
+---
+
+## Why RAG Research?
+
+Research should not feel like repeatedly searching the same 40-page PDF.
+RAG Research keeps the document, the question, and the evidence connected in
+one calm workspace.
+
+- **Understand the whole paper** — preserve titles, sections, figures, tables,
+  reading order, and page context during ingestion.
+- **Ask with confidence** — trace each answer back to its paper, page, passage,
+  retrieval score, and visual region.
+- **Keep the research thread** — organize papers into projects and return to
+  earlier conversations without losing context.
+- **Stay available** — route generation through multiple LLM providers and
+  fall back to grounded extractive answers when hosted models are unavailable.
+- **Start without infrastructure** — use the built-in memory store, local file
+  storage, and mock Docling adapter for a zero-service local demo.
+
+## How It Works
+
+```mermaid
+flowchart LR
+    PDF[Research PDF] --> LAYOUT[Layout detection]
+    LAYOUT --> OCR[OCR and structure]
+    OCR --> CHUNKS[Chunks and embeddings]
+    CHUNKS --> RETRIEVE[Hybrid retrieval]
+    QUESTION[Research question] --> RETRIEVE
+    RETRIEVE --> ANSWER[Grounded answer]
+    ANSWER --> EVIDENCE[Page-level evidence]
 ```
 
-## Run locally
+1. **Ingest** a PDF and register its immutable source file.
+2. **Map** pages, layout blocks, OCR text, figures, and reading order.
+3. **Index** structured chunks for semantic and full-text retrieval.
+4. **Ask** a question inside a project-aware chat session.
+5. **Verify** the answer through citations that remain attached to the source.
+
+## Product Highlights
+
+| Experience | What it gives you |
+| --- | --- |
+| Research workspace | Project-scoped chat, source panel, prompts, and conversation history |
+| Paper library | Uploads, collections, processing state, search, and document details |
+| Evidence inspector | Passage, page, retrieval score, and source-region context |
+| Resilient generation | Groq, OpenRouter, Hugging Face, Ollama, custom provider, then extractive fallback |
+| Realtime processing | WebSocket events for ingestion and chat progress |
+| Local authentication | Email/password sessions with HttpOnly cookies and ownership boundaries |
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 22 or 24
+- npm
+
+### Run the development workspace
 
 ```bash
-npm install
+git clone https://github.com/quangnhat1504/SchoolSummar.git
+cd SchoolSummar
+npm ci
 cp .env.sample .env
 npm run dev
 ```
 
-The dev command prints the frontend URL it selected. It starts the API on `6100` and Vite on the first available port starting at `5173`, with `/api` and `/realtime` proxied to the API; this avoids failures when another local app already uses `5173`. For a production-like build, run `npm run build && npm start` and open `http://localhost:6100`. `DOCLING_MODE=mock` keeps a fresh checkout runnable; use `service` or `cli` for real PDF processing.
+The command starts:
 
-The workspace supports local email/password login at `/login`. Set
-`AUTH_REQUIRED=true` and a strong `AUTH_SESSION_SECRET` for production. Chat
-sessions are persisted per user and project; the workspace reopens the selected
-session and the History view reads from `GET /api/v1/sessions`.
-Passwords require at least 5 characters for this local research workspace.
+- the API at `http://localhost:6100`;
+- Vite on the first available port starting at `http://localhost:5173`;
+- `/api` and `/realtime` proxies from the frontend to the API.
 
-## LLM configuration
+The sample environment is intentionally demo-friendly:
 
-The server uses a provider chain so chat remains available when a hosted model is rate-limited:
+```dotenv
+STORE_MODE=memory
+DOCLING_MODE=mock
+AUTH_REQUIRED=false
+```
+
+No PostgreSQL, S3, Redis, Python, Docling model, or hosted LLM key is required
+to explore the local application.
+
+### Run a production-like local build
+
+```bash
+npm run build
+npm start
+```
+
+Open `http://localhost:6100`.
+
+## Configuration
+
+Copy `.env.sample` to `.env`, then enable only the services you need.
+
+| Capability | Local default | Production option |
+| --- | --- | --- |
+| Metadata and chat storage | In-memory store | PostgreSQL + pgvector |
+| PDF and page assets | Local `storage/` | S3-compatible object storage |
+| Document conversion | Deterministic mock | Docling service or CLI |
+| Authentication | Demo identity allowed | Required signed sessions |
+| Answer generation | Extractive fallback | Hosted or local LLM provider chain |
+
+For a production deployment, set a strong `AUTH_SESSION_SECRET`, enable
+`AUTH_REQUIRED=true`, configure persistent storage, and choose
+`DOCLING_MODE=service` or `DOCLING_MODE=cli`.
+
+### LLM provider chain
 
 ```dotenv
 LLM_PROVIDER=auto
@@ -33,22 +135,46 @@ GROQ_API_KEY=your_key_here
 GROQ_MODEL=llama-3.1-8b-instant
 ```
 
-Groq is the primary hosted Llama 3.1 8B provider. OpenRouter, Hugging Face, and optional local Ollama are fallbacks. If every provider is unavailable, the RAG service returns a grounded extractive answer from the retrieved OCR chunks. Provider state is visible at `GET /api/v1/llm/health`.
+Provider state is available at `GET /api/v1/llm/health`. See
+[docs/llm-providers.md](docs/llm-providers.md) for setup notes and fallback
+behavior.
 
-See [docs/llm-providers.md](docs/llm-providers.md) for provider limits and setup details.
+## Architecture
 
-## Repository structure
+```text
+React + Vite
+    │
+    ├── REST API ───────────────┐
+    └── WebSocket realtime      │
+                               ▼
+                         Node.js service
+                        /       |        \
+                 Auth + RAG  Docling   LLM router
+                     │          │          │
+                     ▼          ▼          ▼
+              PostgreSQL    Object      Hosted/local
+               + pgvector   storage      providers
+```
 
-| Folder | Responsibility |
+Large binaries remain in object storage. PostgreSQL stores user ownership,
+paper metadata, processing runs, extracted text, chunks, embeddings, chat
+messages, and evidence snapshots.
+
+Read [docs/data-architecture.md](docs/data-architecture.md) for the storage,
+row-level security, ingestion, and citation contracts.
+
+## Repository Guide
+
+| Path | Responsibility |
 | --- | --- |
-| `src/` | React UI, landing page, workspace, and reusable components |
-| `server/` | HTTP API, auth, storage, Docling pipeline, RAG, LLM routing, realtime events |
+| `src/` | React landing page, workspace, and reusable UI |
+| `server/` | API, auth, stores, uploads, Docling, retrieval, LLM routing, realtime |
 | `database/` | PostgreSQL/pgvector migration and data invariants |
 | `docs/` | Architecture and provider documentation |
-| `design-system/` | UI/UX design system used by the landing page |
-| `tests/` | Backend, pipeline, realtime, and provider failover tests |
+| `design-system/` | Visual language and interaction guidance |
+| `tests/` | Backend, pipeline, realtime, auth, and provider-failover tests |
 
-## Quality checks
+## Quality Checks
 
 ```bash
 npm run check
@@ -56,4 +182,20 @@ npm test
 npm run build
 ```
 
-Binary PDFs, page images, and raw OCR/Docling payloads belong in configured object storage; PostgreSQL stores metadata, text, chunks, embeddings, and evidence references.
+Health endpoints:
+
+```text
+GET /api/health
+GET /api/ready
+GET /api/v1/llm/health
+```
+
+## Team
+
+**RAG Research is a five-person team project built by:**
+
+- Quang Nhật
+- Thái Hưng
+- Minh Tiến
+- Công Phúc
+- Tuấn Hưng
