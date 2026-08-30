@@ -1,0 +1,27 @@
+# Core PyTorch & CUDA
+torch
+torchvision
+torchaudio
+
+# Document Parsing & Layout Detection
+docling
+rapidocr-onnxruntime
+pycocotools
+faster-coco-eval
+opencv-python
+matplotlib
+PyYAML
+scipy
+datasets
+huggingface_hub
+
+# RAG & Embedding & Retrieval
+sentence-transformers
+faiss-cpu
+
+# Small LLM Inference & Evaluation
+transformers
+accelerate
+
+# Data & Export
+pandas

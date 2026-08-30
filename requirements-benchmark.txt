@@ -1,0 +1,17 @@
+--index-url https://download.pytorch.org/whl/cu128
+torch
+torchvision
+torchaudio
+
+--extra-index-url https://pypi.org/simple
+datasets
+huggingface_hub
+gdown
+ultralytics
+pycocotools
+faster-coco-eval
+opencv-python
+matplotlib
+PyYAML
+scipy
+tensorboard

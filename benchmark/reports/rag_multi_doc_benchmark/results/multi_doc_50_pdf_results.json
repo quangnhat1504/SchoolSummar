@@ -1,0 +1,176 @@
+{
+  "timestamp": "2026-08-30 00:50:00",
+  "num_documents": 30,
+  "hardware": "NVIDIA GeForce RTX 5070 Ti (16GB VRAM) | CUDA 12.8 | PyTorch 2.11",
+  "retriever": "BAAI/bge-large-en-v1.5 (Cosine FlatIP FAISS, 1024-dim)",
+  "chunking_profiles": {
+    "1. Recursive_Fixed": {
+      "total_corpus_chunks": 457,
+      "avg_tokens_per_chunk": 429.2,
+      "min_tokens": 8,
+      "max_tokens": 512,
+      "total_chunking_time_ms": 211.2,
+      "description": "Chia cố định theo độ dài 512t, overlap 64t"
+    },
+    "2. Docling_Structure_Aware": {
+      "total_corpus_chunks": 365,
+      "avg_tokens_per_chunk": 421.6,
+      "min_tokens": 12,
+      "max_tokens": 512,
+      "total_chunking_time_ms": 59.5,
+      "description": "Giữ nguyên 100% bảng Markdown, tự động đính kèm Breadcrumbs tiêu đề cấp bậc"
+    },
+    "3. Semantic_Embedding": {
+      "total_corpus_chunks": 788,
+      "avg_tokens_per_chunk": 191.7,
+      "min_tokens": 15,
+      "max_tokens": 498,
+      "total_chunking_time_ms": 13575.1,
+      "description": "Cắt theo độ sụt giảm Cosine Similarity giữa các câu qua BGE"
+    },
+    "4. Parent_Child_Hierarchical": {
+      "total_corpus_chunks": 2736,
+      "avg_tokens_per_chunk": 84.2,
+      "min_tokens": 10,
+      "max_tokens": 128,
+      "total_chunking_time_ms": 884.3,
+      "description": "Child chunk 128t cho tìm kiếm vector, Parent chunk 512t cho LLM đọc context"
+    },
+    "5. Sentence_Window": {
+      "total_corpus_chunks": 1077,
+      "avg_tokens_per_chunk": 141.3,
+      "min_tokens": 8,
+      "max_tokens": 256,
+      "total_chunking_time_ms": 34.9,
+      "description": "Vector đại diện cho 1 câu trung tâm; mở rộng cửa sổ ±3 câu lân cận"
+    }
+  },
+  "matrix_results": {
+    "Qwen/Qwen2.5-1.5B-Instruct": {
+      "1. Recursive_Fixed": {
+        "avg_fact_recall": 0.7710,
+        "avg_groundedness": 0.4220,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.4359,
+        "avg_exact_match": 0.0909,
+        "avg_latency_sec": 1.99
+      },
+      "2. Docling_Structure_Aware": {
+        "avg_fact_recall": 0.7270,
+        "avg_groundedness": 0.6100,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.4343,
+        "avg_exact_match": 0.1818,
+        "avg_latency_sec": 2.44
+      },
+      "3. Semantic_Embedding": {
+        "avg_fact_recall": 0.7430,
+        "avg_groundedness": 0.5230,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.3670,
+        "avg_exact_match": 0.0909,
+        "avg_latency_sec": 3.58
+      },
+      "4. Parent_Child_Hierarchical": {
+        "avg_fact_recall": 0.7250,
+        "avg_groundedness": 0.5890,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.4131,
+        "avg_exact_match": 0.0909,
+        "avg_latency_sec": 2.80
+      },
+      "5. Sentence_Window": {
+        "avg_fact_recall": 0.7750,
+        "avg_groundedness": 0.4670,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.3445,
+        "avg_exact_match": 0.0000,
+        "avg_latency_sec": 2.50
+      }
+    },
+    "Qwen/Qwen2.5-3B-Instruct": {
+      "1. Recursive_Fixed": {
+        "avg_fact_recall": 0.6740,
+        "avg_groundedness": 0.7390,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.5519,
+        "avg_exact_match": 0.2727,
+        "avg_latency_sec": 1.83
+      },
+      "2. Docling_Structure_Aware": {
+        "avg_fact_recall": 0.6540,
+        "avg_groundedness": 0.7640,
+        "negative_rejection_acc": 0.8180,
+        "avg_f1": 0.5765,
+        "avg_exact_match": 0.2727,
+        "avg_latency_sec": 1.54
+      },
+      "3. Semantic_Embedding": {
+        "avg_fact_recall": 0.6730,
+        "avg_groundedness": 0.6420,
+        "negative_rejection_acc": 0.9090,
+        "avg_f1": 0.5468,
+        "avg_exact_match": 0.2727,
+        "avg_latency_sec": 1.91
+      },
+      "4. Parent_Child_Hierarchical": {
+        "avg_fact_recall": 0.5950,
+        "avg_groundedness": 0.8500,
+        "negative_rejection_acc": 0.8180,
+        "avg_f1": 0.5318,
+        "avg_exact_match": 0.2727,
+        "avg_latency_sec": 1.16
+      },
+      "5. Sentence_Window": {
+        "avg_fact_recall": 0.7200,
+        "avg_groundedness": 0.6340,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.5823,
+        "avg_exact_match": 0.2727,
+        "avg_latency_sec": 2.44
+      }
+    },
+    "Qwen/Qwen2.5-7B-Instruct": {
+      "1. Recursive_Fixed": {
+        "avg_fact_recall": 0.7820,
+        "avg_groundedness": 0.8850,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.6120,
+        "avg_exact_match": 0.3636,
+        "avg_latency_sec": 3.12
+      },
+      "2. Docling_Structure_Aware": {
+        "avg_fact_recall": 0.8140,
+        "avg_groundedness": 0.9230,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.6480,
+        "avg_exact_match": 0.4545,
+        "avg_latency_sec": 2.89
+      },
+      "3. Semantic_Embedding": {
+        "avg_fact_recall": 0.7610,
+        "avg_groundedness": 0.8460,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.5930,
+        "avg_exact_match": 0.2727,
+        "avg_latency_sec": 3.45
+      },
+      "4. Parent_Child_Hierarchical": {
+        "avg_fact_recall": 0.7900,
+        "avg_groundedness": 0.9410,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.6310,
+        "avg_exact_match": 0.4545,
+        "avg_latency_sec": 2.21
+      },
+      "5. Sentence_Window": {
+        "avg_fact_recall": 0.7580,
+        "avg_groundedness": 0.8200,
+        "negative_rejection_acc": 1.0000,
+        "avg_f1": 0.5890,
+        "avg_exact_match": 0.2727,
+        "avg_latency_sec": 3.38
+      }
+    }
+  }
+}

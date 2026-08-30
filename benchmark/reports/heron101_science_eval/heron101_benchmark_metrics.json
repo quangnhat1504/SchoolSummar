@@ -1,0 +1,111 @@
+{
+  "benchmark_metadata": {
+    "model_name": "Heron-101 (Pretrained Original)",
+    "model_id": "docling-project/docling-layout-heron-101",
+    "architecture": "RT-DETRv2-ResNet101",
+    "weights_source": "HuggingFace Official docling-project/docling-layout-heron-101",
+    "dataset_name": "DocBank (arXiv Scientific Papers)",
+    "reproducibility_seed": 42,
+    "reading_order_sorted": true,
+    "sorting_algorithm": "two_column_scientific_reading_order",
+    "sample_count": 100,
+    "ground_truth_annotations_count": 1316,
+    "confidence_threshold": 0.2,
+    "iou_threshold": 0.5,
+    "hardware": {
+      "gpu": "NVIDIA GeForce RTX 5070 Ti",
+      "dtype": "FP16"
+    }
+  },
+  "performance_metrics": {
+    "mean_latency_ms_per_page": 58.71,
+    "median_latency_ms_per_page": 58.79,
+    "throughput_pages_per_sec": 14.26,
+    "peak_vram_gb": 0.23,
+    "total_inference_time_sec": 7.01
+  },
+  "coco_detection_metrics": {
+    "mAP50-95": 0.2794787660850928,
+    "mAP50": 0.4519835864703994,
+    "mAP75": 0.2614761687189149,
+    "AP_small": 0.017748082700758776,
+    "AP_medium": 0.1761509105008479,
+    "AP_large": 0.3442205969958086,
+    "AR_1": 0.22819318320541174,
+    "AR_10": 0.40134343777667,
+    "AR_100": 0.4357547973450928,
+    "AR_small": 0.05465918628187757,
+    "AR_medium": 0.36179189095036357,
+    "AR_large": 0.540906432748538
+  },
+  "global_classification_metrics": {
+    "tp": 443,
+    "fp": 1993,
+    "fn": 873,
+    "precision": 0.1819,
+    "recall": 0.3366,
+    "f1": 0.2361
+  },
+  "per_class_breakdown": {
+    "text": {
+      "category_id": 1,
+      "tp": 285,
+      "fp": 1488,
+      "fn": 595,
+      "precision": 0.1607,
+      "recall": 0.3239,
+      "f1": 0.2149,
+      "mAP50-95": 0.0842,
+      "mAP50": 0.1379,
+      "mAP75": 0.0752
+    },
+    "title": {
+      "category_id": 2,
+      "tp": 72,
+      "fp": 100,
+      "fn": 42,
+      "precision": 0.4186,
+      "recall": 0.6316,
+      "f1": 0.5035,
+      "mAP50-95": 0.2149,
+      "mAP50": 0.5047,
+      "mAP75": 0.1127
+    },
+    "figure": {
+      "category_id": 3,
+      "tp": 24,
+      "fp": 36,
+      "fn": 3,
+      "precision": 0.4,
+      "recall": 0.8889,
+      "f1": 0.5517,
+      "mAP50-95": 0.4567,
+      "mAP50": 0.7496,
+      "mAP75": 0.5349
+    },
+    "figure_caption": {
+      "category_id": 4,
+      "tp": 22,
+      "fp": 10,
+      "fn": 4,
+      "precision": 0.6875,
+      "recall": 0.8462,
+      "f1": 0.7586,
+      "mAP50-95": 0.6334,
+      "mAP50": 0.8365,
+      "mAP75": 0.5828
+    },
+    "equation": {
+      "category_id": 5,
+      "tp": 40,
+      "fp": 359,
+      "fn": 229,
+      "precision": 0.1003,
+      "recall": 0.1487,
+      "f1": 0.1198,
+      "mAP50-95": 0.0083,
+      "mAP50": 0.0313,
+      "mAP75": 0.0017
+    }
+  }
+}
