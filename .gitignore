@@ -1,0 +1,50 @@
+# Environment & secrets
+.env
+.env.*
+*.env
+!.env.sample
+
+# Local development & runtime artifacts
+.venv/
+.venv*/
+node_modules/
+dist/
+build/
+coverage/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+storage/
+.runtime/
+.agents/
+.freebuff/
+.agent_scratchpad.md
+-DESKTOP-*.gitignore
+
+# Large binary files & models
+*.pt
+*.pth
+*.bin
+*.onnx
+*.mp4
+*.zip
+*.rar
+*.tar.gz
+*.7z
+*.exe
+rclone*
+rclone_temp/
+
+# Large datasets & raw data
+data/raw/
+data/processed/
+data/archives/
+raw/
+external/
+pdf-ingestion-benchmark/data/
+pdf-ingestion-benchmark/promotion-gate/data/pdfs/
+benchmark/predictions/
+benchmark/kaggle/outputs/
+benchmark/kaggle/outputs_*/
+benchmark/kaggle/verified/
