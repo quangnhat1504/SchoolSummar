@@ -35,8 +35,32 @@ const llmAnswer = async (llm, config, question, sources) => {
   return result?.text ? result : null
 }
 
-export const answerQuestion = async (config, store, ownerId, question, scope, llm) => {
-  const sources = await store.searchChunks(ownerId, question, { paperId: scope?.paperId, limit: config.rerankTopK })
+export const answerQuestion = async (config, store, ownerId, question, scope, llm, vectorStore = null, embedder = null) => {
+  let sources = []
+  if (vectorStore && embedder && embedder.isConfigured) {
+    try {
+      const queryVector = await embedder.embedQuery(question)
+      const vectorResults = await vectorStore.search(queryVector, config.rerankTopK || 8)
+      if (Array.isArray(vectorResults) && vectorResults.length > 0) {
+        sources = vectorResults.map((r) => ({
+          paperId: r.paperId || (r.payload && r.payload.paperId) || '',
+          processingRunId: r.processingRunId || (r.payload && r.payload.processingRunId) || '',
+          chunkId: r.chunkId || r.id || '',
+          title: r.title || (r.payload && r.payload.title) || 'Research Paper',
+          text: r.text || (r.payload && r.payload.text) || '',
+          pageStart: r.pageStart || (r.payload && r.payload.pageStart) || 1,
+          pageEnd: r.pageEnd || (r.payload && r.payload.pageEnd) || 1,
+          score: Number(r.score || 0),
+        }))
+      }
+    } catch {
+      // Gracefully fallback to relational/memory store
+    }
+  }
+
+  if (!sources.length) {
+    sources = await store.searchChunks(ownerId, question, { paperId: scope?.paperId, limit: config.rerankTopK })
+  }
   let answer
   try { answer = await llmAnswer(llm, config, question, sources) } catch { answer = null }
   return {
