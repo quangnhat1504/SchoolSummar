@@ -167,5 +167,16 @@ Dự án được bảo đảm chất lượng nghiêm ngặt qua 3 lớp kiểm
 
 ---
 
+## 👥 Thành Viên Tham Gia Dự Án (Project Members)
+
+1. **Đặng Quang Nhật**
+2. **Phạm Minh Tiến**
+3. **Nguyễn Thái Hưng**
+4. **Trương Công Phúc**
+5. **Phan Tuấn Hưng**
+
+---
+
 ## 📄 License
 Phát triển và phân phối dưới giấy phép [MIT License](LICENSE).
+
