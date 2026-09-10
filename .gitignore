@@ -2,6 +2,7 @@
 .env
 .env.*
 *.env
+/env
 !.env.sample
 
 # Local development & runtime artifacts
@@ -38,15 +39,28 @@ __pycache__/
 rclone*
 rclone_temp/
 
-# Large datasets & raw data
-data/raw/
-data/processed/
-data/archives/
+# Large datasets, raw data & research benchmarks
+data/
 raw/
 external/
-pdf-ingestion-benchmark/data/
-pdf-ingestion-benchmark/promotion-gate/data/pdfs/
-benchmark/predictions/
-benchmark/kaggle/outputs/
-benchmark/kaggle/outputs_*/
-benchmark/kaggle/verified/
+benchmark/
+pdf-ingestion-benchmark/
+wiki/
+graph/
+*.xlsx
+*.csv
+reproduce.py
+requirements-benchmark.txt
+plan*.md
+install_hermes.ps1
+run_antigravity_server.bat
+docs/reports/
+docs/kaggle-transfer-operations.md
+
+# Legacy research and training scripts in tools/ (whitelist active webapp tools)
+tools/*
+!tools/cloud_sql_tool.mjs
+!tools/qdrant_cli.mjs
+!tools/qdrant_tool.py
+!tools/verify_cuda.py
+
