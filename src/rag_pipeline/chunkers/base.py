@@ -3,7 +3,12 @@ Base Chunker class and utilities for token estimation.
 """
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
-import tiktoken
+
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
+
 from src.rag_pipeline.schema import Chunk, DocumentNode
 
 class BaseChunker(ABC):

@@ -15,7 +15,7 @@ coverage/
 __pycache__/
 *.pyc
 *.pyo
-storage/
+/storage/
 .runtime/
 .agents/
 .freebuff/
@@ -33,6 +33,8 @@ storage/
 *.tar.gz
 *.7z
 *.exe
+*.db
+*.sqlite*
 rclone*
 rclone_temp/
 
