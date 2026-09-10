@@ -21,10 +21,11 @@ RULES:
 class SmallLLMEngine:
     """
     Engine to load and run Small Language Models locally on GPU.
+    Standardized on Qwen2.5-7B-Instruct for high factual accuracy and zero hallucination.
     """
     def __init__(
         self,
-        model_id: str = "Qwen/Qwen2.5-3B-Instruct",
+        model_id: str = "Qwen/Qwen2.5-7B-Instruct",
         device: Optional[str] = None,
         torch_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
         max_new_tokens: int = 512,

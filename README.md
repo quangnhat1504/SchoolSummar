@@ -1,127 +1,171 @@
-# Document Layout Detection, OCR & Multi-Document RAG Reproducibility Suite
+# SchoolSummar — Research RAG Web Application
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
-[![CUDA 12.8](https://img.shields.io/badge/CUDA-12.8-76b900.svg)](https://developer.nvidia.com/cuda-toolkit)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![React 19](https://img.shields.io/badge/React-19.0-61dafb?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-Latest-646cff?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4+-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Qdrant Cloud](https://img.shields.io/badge/Qdrant-Cloud_Vector_DB-dc2626?logo=qdrant&logoColor=white)](https://qdrant.tech/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Qwen 2.5](https://img.shields.io/badge/SLM-Qwen2.5--7B--Instruct-ff6b00)](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct)
 
-Repository này chứa toàn bộ mã nguồn thực thi, cấu trúc pipeline và bộ script tái hiện kết quả thực nghiệm (**Reproducibility Suite**) cho toàn bộ chu trình xử lý tài liệu thông minh:
-1. **Layout Detection**: Đánh giá mô hình phát hiện bố cục bài báo khoa học `docling-project/docling-layout-heron-101` (RT-DETRv2-ResNet101).
-2. **Layout-Guided OCR**: Sắp xếp thứ tự đọc 2 cột chuẩn khoa học (`reading_order`) và trích xuất vùng nhận dạng chữ.
-3. **5 Chiến Lược Chunking & Vector Retrieval**: Đánh giá 5 thuật toán phân đoạn tài liệu trên kho tri thức 30–50 PDFs kết hợp `BAAI/bge-large-en-v1.5` + FAISS FlatIP (1024-dim).
-4. **Small LLM Groundedness & Evaluation**: Đo lường định lượng khả năng thu nhận dữ kiện, chống ảo giác (*Faithfulness*), và biết từ chối (*Negative Rejection*) của `Qwen2.5-1.5B`, `Qwen2.5-3B`, `Qwen2.5-7B`.
+**SchoolSummar RAG** là nền tảng web thông minh hỗ trợ đọc, phân tích và hỏi đáp chuyên sâu trên các bài báo và tài liệu khoa học phức tạp. Hệ thống kết hợp phân tích bố cục chuyên sâu (**Docling Structure-Aware**), tìm kiếm ngữ nghĩa thời gian thực trên **Qdrant Cloud**, cơ sở dữ liệu quan hệ **Supabase**, và mô hình ngôn ngữ **Qwen2.5-7B** có trích dẫn nguồn xác thực (*grounded citations*).
 
 ---
 
-## 📁 Cấu Trúc Mã Nguồn (Repository Structure)
+## 🏛️ Kiến Trúc Hệ Thống (System Architecture)
+
+```mermaid
+flowchart TB
+    subgraph Client["🖥️ Frontend (React 19 + Vite + Tailwind)"]
+        UI["Modern Research Workspace"]
+        Chat["Realtime Streaming Chat"]
+        Preview["PDF Page & Chunk Viewer"]
+    end
+
+    subgraph Backend["⚙️ Backend Server (Node.js ESM)"]
+        API["Express REST API (Port 6100)"]
+        WS["WebSocket Realtime Hub"]
+        Router["Multi-LLM Router (Groq, OpenRouter, HF, Ollama)"]
+    end
+
+    subgraph Engine["🧠 RAG Engine (Python)"]
+        Parser["Docling Parser (AST & FastOCR)"]
+        Chunker["Docling Structure Chunking (Tables & Headers)"]
+        Embedder["BAAI/bge-large-en-v1.5 (CUDA GPU)"]
+        SLM["Qwen2.5-7B-Instruct (bfloat16)"]
+    end
+
+    subgraph DataStore["💾 Storage & Vector Databases"]
+        Qdrant[("Qdrant Cloud (Vector Index 1536-dim)")]
+        Supabase[("Supabase / Cloud SQL (PostgreSQL)")]
+        S3[("Object Storage (PDF Archives)")]
+    end
+
+    Client <-->|REST & WebSocket| Backend
+    Backend <--> Engine
+    Backend <-->|CRUD & Metadata| Supabase
+    Backend <-->|PDF Stream| S3
+    Engine <-->|Dense Vectors| Qdrant
+    Engine <-->|Raw Text & Chunks| Supabase
+```
+
+---
+
+## ✨ Điểm Nhấn Công Nghệ Cốt Lõi
+
+1. **Docling Structure-Aware Chunking**:
+   - Khác biệt với các phương pháp chia đoạn truyền thống (dễ bị cắt đứt giữa các dòng bảng biểu), thuật toán bám sát cây phân cấp AST của tài liệu, bảo tồn **100% nguyên vẹn cấu trúc bảng biểu Markdown** và duy trì chuỗi breadcrumb ngữ cảnh (`Heading > Subheading`).
+2. **Qwen2.5-7B-Instruct Local SLM**:
+   - Chuẩn hóa mô hình ngôn ngữ cục bộ trên kiến trúc Qwen2.5 7B tối ưu bfloat16 cho GPU CUDA, triệt tiêu ảo giác (*zero hallucination*) với khả năng từ chối trả lời (*negative rejection*) khi dữ liệu không nằm trong tài liệu.
+3. **Hybrid Cloud Data Architecture**:
+   - **Vector Database**: Qdrant Cloud (Cosine Similarity, Payload Filtering theo Document ID / Page Index).
+   - **Relational Storage**: Supabase PostgreSQL lưu trữ toàn bộ metadata, văn bản thô, sessions và audit log truy vấn.
+   - **Multi-LLM Resilience**: Tự động chuyển đổi mượt mà giữa mô hình cục bộ và các nhà cung cấp đám mây (Groq, OpenRouter, HuggingFace).
+
+---
+
+## 📁 Cấu Trúc Thư Mục Chuẩn (Project Layout)
 
 ```text
-├── reproduce.py                                 # 🚀 Master CLI tự động tái hiện toàn bộ các bước
-├── requirements.txt                             # Danh mục thư viện phụ thuộc
+RAG/
+├── src/                        # 🎨 Frontend Webapp (React 19 + TypeScript + Vite)
+│   ├── App.tsx                 # Giao diện chính RAG Research Workspace
+│   ├── LandingPage.tsx         # Trang giới thiệu / Onboarding
+│   ├── components/             # Bộ UI Components & AI Elements
+│   └── lib/                    # Supabase client & utilities
 │
-├── src/rag_pipeline/                            # 🧠 Kiến trúc Core RAG Pipeline
-│   ├── schema.py                                # Data schemas (DocumentNode, Chunk, EvaluationSample)
-│   ├── parsers/docling_parser.py                # IBM Docling AST Parser & Markdown Extractor
-│   ├── chunkers/                                # 5 Thuật toán phân đoạn độc lập
-│   │   ├── recursive_chunker.py                 # 1. Recursive Fixed Length (512t, overlap 64t)
-│   │   ├── docling_structure_chunker.py         # 2. Docling Structure-Aware (bảo toàn bảng biểu)
-│   │   ├── semantic_chunker.py                  # 3. Semantic Embedding Chunker (BGE Cosine)
-│   │   ├── parent_child_chunker.py              # 4. Parent-Child Hierarchical (Child 128t, Parent 512t)
-│   │   └── sentence_window_chunker.py           # 5. Sentence Window Chunker (±3 câu context)
-│   ├── embeddings/bge_retriever.py              # BAAI/bge-large-en-v1.5 + FAISS Cosine Index
-│   ├── models/slm_engine.py                     # Small LLM Engine (Qwen2.5 1.5B/3B/7B bfloat16)
-│   ├── evaluation/metrics.py                    # Fact Recall, Groundedness, Negative Rejection, F1
-│   └── benchmarks/                              # Benchmark runners
-│       ├── multi_doc_benchmark_50.py            # Large-Scale Multi-Doc Runner (30-50 PDFs)
-│       └── benchmark_matrix.py                  # Full Matrix Benchmark Runner
+├── server/                     # 🚀 Backend API Server (Node.js ESM)
+│   ├── app.mjs                 # Cấu hình Express, REST routes & WebSocket hub
+│   ├── llm.mjs                 # Router LLM đa nhà cung cấp & failover
+│   ├── docling.mjs             # Adapter tích hợp Docling ingestion
+│   ├── rag.mjs                 # Retrieval & Streaming Answer Pipeline
+│   └── supabase.mjs            # Client kết nối Supabase Cloud SQL
 │
-├── benchmark/reports/                           # 📊 Toàn bộ kết quả và báo cáo khoa học
-│   ├── heron101_science_eval/                   # Gói đánh giá Layout Detection & OCR (DocBank 100 pages)
-│   │   ├── run_benchmark.py                     # Script chạy lại đánh giá Heron-101
-│   │   ├── ocr_inference_example.py             # Script trích xuất bounding box & reading order OCR
-│   │   ├── interactive_player.html              # Dashboard tương tác xem trước 100 trang bài báo
-│   │   └── heron101_benchmark_metrics.json      # Bảng chỉ số mAP50 (45.2%), mAP50-95 (27.95%), Latency
-│   │
-│   └── rag_multi_doc_benchmark/                 # Gói đánh giá Multi-Document RAG (30-50 PDFs)
-│       ├── README.md                            # Tổng quan chi tiết và ma trận kết quả RAG
-│       ├── reports/                             # Báo cáo Markdown chi tiết
-│       ├── results/                             # Kết quả JSON & CSV (Task 1 & Task 2)
-│       └── scripts/                             # Script thực thi độc lập
+├── rag_engine/                 # 🧠 Core Python RAG Engine
+│   ├── chunkers/               # Docling Structure-Aware Chunker
+│   ├── models/                 # Qwen2.5-7B-Instruct SLM Engine
+│   ├── embeddings/             # BAAI/bge-large-en-v1.5 Retriever
+│   ├── parsers/                # Docling AST Parser
+│   └── storage/                # SQLite & Metadata Store
 │
-└── tools/                                       # Công cụ bổ trợ
-    ├── run_heron101_science_benchmark.py
-    └── generate_inference_video.py
+├── database/                   # 🗄️ Database Schemas & Migrations
+│   └── migrations/             # SQL Migrations cho Supabase / PostgreSQL
+│
+├── tools/                      # 🛠️ Webapp CLI Utilities
+│   ├── cloud_sql_tool.mjs      # Quản lý & kiểm tra kết nối Supabase
+│   ├── qdrant_cli.mjs          # Quản lý collections Qdrant Cloud
+│   └── verify_cuda.py          # Kiểm tra cấu hình GPU CUDA
+│
+├── dev.mjs                     # Script khởi chạy môi trường phát triển
+├── server.mjs                  # Script khởi chạy máy chủ production
+├── package.json                # Danh mục phụ thuộc Node.js
+└── index.html                  # Single Page Application Entrypoint
 ```
 
 ---
 
-## ⚡ Cài Đặt Môi Trường (Installation)
+## ⚡ Hướng Dẫn Cài Đặt & Khởi Chạy (Quickstart)
 
+### 1. Yêu cầu hệ thống
+- **Node.js**: >= 20.x
+- **Python**: >= 3.10 (Khuyến nghị có GPU NVIDIA hỗ trợ CUDA)
+
+### 2. Cài đặt thư viện
 ```bash
-# 1. Tạo và kích hoạt môi trường ảo Python
-python -m venv .venv
-source .venv/bin/activate  # Trên Linux/macOS
-# .\.venv\Scripts\activate   # Trên Windows
+# Cài đặt Node.js dependencies
+npm install
 
-# 2. Cài đặt các thư viện phụ thuộc
-pip install -r requirements.txt
+# Tạo và kích hoạt môi trường ảo Python
+python -m venv .venv-cuda
+# Trên Windows:
+.\.venv-cuda\Scripts\activate
+# Trên Linux/macOS:
+source .venv-cuda/bin/activate
+
+# Cài đặt thư viện Python
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install sentence-transformers qdrant-client transformers accelerate pymupdf
 ```
+
+### 3. Cấu hình biến môi trường
+Sao chép file mẫu và điền các khóa API của bạn:
+```bash
+cp .env.sample .env
+```
+Các thông số chính trong `.env`:
+- `QDRANT_URL` & `QDRANT_API_KEY`: Kết nối cụm Qdrant Cloud.
+- `NEXT_PUBLIC_SUPABASE_URL` & `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: Kết nối Supabase.
+- `GROQ_API_KEY` (Tùy chọn): Khóa miễn phí cho Llama 3.1 8B.
+
+### 4. Khởi chạy Web Application
+Chỉ với một lệnh duy nhất để khởi chạy đồng thời cả Frontend và Backend:
+```bash
+npm run dev
+```
+- **Frontend SPA**: `http://localhost:5173` (Hỗ trợ Vite Hot Module Replacement)
+- **Backend API**: `http://localhost:6100`
 
 ---
 
-## 🚀 Hướng Dẫn Tái Hiện Kết Quả (How to Reproduce)
+## 🧪 Kiểm Thử Hệ Thống (Quality Assurance)
 
-### 1. Tự Động Chạy Toàn Bộ (Master CLI)
-```bash
-python reproduce.py --all
-```
+Dự án được bảo đảm chất lượng nghiêm ngặt qua 3 lớp kiểm thử:
 
-### 2. Tái Hiện Từng Bước Riêng Biệt
-
-#### Bước 1: Đánh Giá Layout Detection (Heron-101 trên DocBank)
-```bash
-python reproduce.py --step layout
-# Hoặc chạy trực tiếp:
-python benchmark/reports/heron101_science_eval/run_benchmark.py --seed 42 --num-samples 100
-```
-
-#### Bước 2: Thử Nghiệm Layout-Guided OCR & Sắp Xếp Thứ Tự Đọc
-```bash
-python reproduce.py --step ocr
-# Hoặc chạy trực tiếp:
-python benchmark/reports/heron101_science_eval/ocr_inference_example.py
-```
-
-#### Bước 3: Benchmark 5 Chiến Lược Chunking & Vector Retrieval (30 PDFs)
-```bash
-python reproduce.py --step retrieval --num_pdfs 30
-```
-
-#### Bước 4: Đánh Giá Năng Lực Small LLMs (1.5B, 3B, 7B)
-```bash
-python reproduce.py --step llm --num_pdfs 30 --models Qwen/Qwen2.5-1.5B-Instruct Qwen/Qwen2.5-3B-Instruct Qwen/Qwen2.5-7B-Instruct
-```
-
----
-
-## 📈 Tóm Tắt Kết Quả Thực Nghiệm Chính
-
-### 1. Layout Detection Benchmark (Heron-101 trên 100 Trang DocBank)
-- **mAP [0.50:0.95]**: `0.2795` (27.95%)
-- **mAP @ 0.50**: `0.4520` (45.20%)
-- **Độ trễ trung bình**: `55.51 ms / trang` (Peak VRAM: 0.23 GB)
-
-### 2. Task 1: So Sánh 5 Chiến Lược Chunking (30 PDFs)
-| Chiến lược Chunking | Tổng Chunks | Avg Tokens | Thời gian Chunk | Đặc tính nổi bật |
-| :--- | :---: | :---: | :---: | :--- |
-| **Docling Structure-Aware** | **365** | 421.6 | **59.5 ms** | Bảo toàn nguyên vẹn 100% bảng Markdown & Breadcrumbs |
-| **Parent-Child Hierarchical**| **2,736** | 84.2 | **884.3 ms** | Vector con 128t định vị chính xác, ngữ cảnh cha 512t cho LLM |
-
-### 3. Task 2: Ma Trận Năng Lực Small LLMs
-- **Sweet Spot (Qwen2.5-3B)**: Đạt **76.4% – 85.0%** Entity Groundedness, độ trễ chỉ **1.16s – 1.83s** trên RTX 5070 Ti.
-- **Top Accuracy (Qwen2.5-7B)**: Đạt đỉnh **94.1%** Entity Groundedness, Negative Rejection đạt **100%**.
+1. **E2E Browser Testing (Playwright + Chromium)**:
+   - Kiểm thử toàn diện hành trình người dùng trên Google Chrome thật: từ Landing Page, điều hướng Workspace, render giao diện chat đến trình xem trước tài liệu.
+2. **Backend & LLM Router Tests**:
+   - Kiểm tra khả năng xử lý upload PDF, định dạng Docling và cơ chế tự động chuyển vùng (*failover*) giữa các nhà cung cấp LLM:
+   ```bash
+   npm test
+   ```
+3. **Python End-to-End RAG Verification**:
+   - Kiểm thử đồng bộ vector lên Qdrant Cloud, tính toán embedding BGE trên GPU CUDA và đối chiếu độ chính xác ngữ nghĩa:
+   ```bash
+   python tests/test_full_rag_pipeline.py
+   ```
 
 ---
 
 ## 📄 License
-Dự án được phân phối dưới giấy phép [MIT License](LICENSE).
+Phát triển và phân phối dưới giấy phép [MIT License](LICENSE).

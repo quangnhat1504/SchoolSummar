@@ -93,7 +93,7 @@ class DoclingStructureChunker(BaseChunker):
         return chunks
 
     def _chunk_from_markdown(self, markdown_text: str, base_meta: Dict[str, Any]) -> List[Chunk]:
-        """Fallback markdown section splitter."""
+        """Fallback markdown section splitter that respects max_tokens."""
         lines = markdown_text.splitlines()
         sections = []
         cur_sec = []
@@ -111,11 +111,41 @@ class DoclingStructureChunker(BaseChunker):
             sections.append((cur_heading, "\n".join(cur_sec)))
 
         chunks = []
-        for i, (head, body) in enumerate(sections):
-            text = f"{head}\n{body}".strip() if head and not body.startswith(head) else body.strip()
-            chunks.append(Chunk(
-                text=text,
-                metadata={**base_meta, "chunk_index": i, "heading": head, "strategy": self.name},
-                token_count=self.count_tokens(text)
-            ))
+        chunk_idx = 0
+        for head, body in sections:
+            paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
+            if not paragraphs:
+                paragraphs = [body.strip()] if body.strip() else []
+
+            current_p_buffer = []
+            current_tokens = self.count_tokens(head) if head else 0
+
+            for p in paragraphs:
+                p_tokens = self.count_tokens(p)
+                if current_p_buffer and (current_tokens + p_tokens > self.max_tokens):
+                    body_text = "\n\n".join(current_p_buffer)
+                    chunk_text = f"{head}\n\n{body_text}".strip() if head else body_text
+                    chunks.append(Chunk(
+                        text=chunk_text,
+                        metadata={**base_meta, "chunk_index": chunk_idx, "heading": head, "strategy": self.name},
+                        token_count=self.count_tokens(chunk_text)
+                    ))
+                    chunk_idx += 1
+                    current_p_buffer = [p]
+                    current_tokens = (self.count_tokens(head) if head else 0) + p_tokens
+                else:
+                    current_p_buffer.append(p)
+                    current_tokens += p_tokens
+
+            if current_p_buffer:
+                body_text = "\n\n".join(current_p_buffer)
+                chunk_text = f"{head}\n\n{body_text}".strip() if head else body_text
+                chunks.append(Chunk(
+                    text=chunk_text,
+                    metadata={**base_meta, "chunk_index": chunk_idx, "heading": head, "strategy": self.name},
+                    token_count=self.count_tokens(chunk_text)
+                ))
+                chunk_idx += 1
+
         return chunks
+

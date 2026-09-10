@@ -6,9 +6,13 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import time
 
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.pipeline_options import PdfPipelineOptions, RapidOcrOptions
-from docling.datamodel.base_models import InputFormat
+try:
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+    from docling.datamodel.pipeline_options import PdfPipelineOptions, RapidOcrOptions
+    from docling.datamodel.base_models import InputFormat
+    HAS_DOCLING = True
+except ImportError:
+    HAS_DOCLING = False
 
 from rag_engine.schema import DocumentNode
 
@@ -17,6 +21,11 @@ class DoclingParser:
     High-performance Document Parser using Docling with RapidOCR/FastOCR acceleration.
     """
     def __init__(self, use_ocr: bool = True, force_full_page_ocr: bool = False):
+        if not HAS_DOCLING:
+            raise ImportError(
+                "IBM Docling is not installed in the current environment. "
+                "Install it with `pip install docling rapidocr-onnxruntime` or run in service mode."
+            )
         self.use_ocr = use_ocr
         self.pipeline_options = PdfPipelineOptions()
         self.pipeline_options.do_ocr = use_ocr
