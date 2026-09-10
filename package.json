@@ -27,6 +27,7 @@
     "@streamdown/code": "^1.1.1",
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
+    "@supabase/supabase-js": "^2.116.0",
     "ai": "latest",
     "busboy": "^1.6.0",
     "class-variance-authority": "^0.7.1",
