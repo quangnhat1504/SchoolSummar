@@ -65,4 +65,5 @@ tools/*
 !tools/qdrant_cli.mjs
 !tools/qdrant_tool.py
 !tools/verify_cuda.py
+!tools/test_cloudflare_embedding.mjs
 
