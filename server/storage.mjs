@@ -13,10 +13,9 @@ export class LocalObjectStore {
     await mkdir(dirname(destination), { recursive: true })
     try {
       await rename(sourcePath, destination)
-    } catch (error) {
-      if (error.code !== 'EXDEV') throw error
+    } catch {
       await copyFile(sourcePath, destination)
-      await unlink(sourcePath)
+      await unlink(sourcePath).catch(() => {})
     }
     return { objectKey: cleanKey(objectKey) }
   }

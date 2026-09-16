@@ -399,15 +399,28 @@ function UploadModal({
       setProgressMsg('Đang phân tích Layout, OCR và thực hiện Chunking...')
 
       const paperId = res.paper.id
+
+      const notifySuccess = (paperData: any) => {
+        setStep('done')
+        setProgressMsg('Chunking và tạo Vector Embedding hoàn tất!')
+        setIsUploading(false)
+        onSuccess?.(paperData)
+        try {
+          const uiPaper = toUiPaper(paperData)
+          const current = readLocalPapers()
+          if (!current.some((p) => p.id === uiPaper.id)) {
+            persistLocalPapers([uiPaper, ...current])
+          }
+          window.dispatchEvent(new CustomEvent('research-rag-paper-added', { detail: paperData }))
+        } catch {}
+      }
+
       let attempts = 0
       const poll = async () => {
         try {
           const procData = await api(`/api/v1/papers/${paperId}/processing`)
           if (procData?.run?.status === 'succeeded' || procData?.run?.status === 'ready') {
-            setStep('done')
-            setProgressMsg('Chunking và tạo Vector Embedding hoàn tất!')
-            setIsUploading(false)
-            onSuccess?.(res.paper)
+            notifySuccess(res.paper)
             return
           }
           if (procData?.run?.status === 'failed') {
@@ -422,10 +435,7 @@ function UploadModal({
         if (attempts < 15) {
           setTimeout(poll, 1500)
         } else {
-          setStep('done')
-          setProgressMsg('Tài liệu đã được tải lên và đang tiếp tục xử lý ở chế độ nền!')
-          setIsUploading(false)
-          onSuccess?.(res.paper)
+          notifySuccess(res.paper)
         }
       }
       setTimeout(poll, 1200)
@@ -582,6 +592,17 @@ function UploadModal({
               >
                 <FileChartColumn size={15} />
                 <span>Xem Tiến Trình Chunking</span>
+              </button>
+              <button
+                type="button"
+                className="outline-button"
+                onClick={() => {
+                  resetAndClose()
+                  navigate(`/documents?project=${slugify(selectedProject)}`)
+                }}
+              >
+                <Folder size={15} />
+                <span>Xem Trong Quản Lý Tài Liệu</span>
               </button>
               <button
                 type="button"
@@ -989,7 +1010,25 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
   )
 }
 
-function Papers({ onMenu }: { onMenu: () => void }) { const [query, setQuery] = useState(''); const [remote, setRemote] = useState<typeof papers | null>(null); const [error, setError] = useState(''); useEffect(() => { void api('/api/v1/papers').then((payload) => setRemote(payload.items.map(toUiPaper))).catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Unable to load papers')) }, []); const source = remote || papers; const filtered = useMemo(() => source.filter(p => `${p.title} ${p.authors}`.toLowerCase().includes(query.toLowerCase())), [query, source]); return <div className="page-content"><Topbar title="Papers" subtitle="Your research library, ready for grounded answers." onMenu={onMenu} /><div className="library-toolbar"><div className="search-field"><Search size={16} /><input aria-label="Search papers" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search papers, authors, DOI..." /></div><button className="filter-button"><SlidersHorizontal size={15} /> Filters</button><select aria-label="Filter papers"><option>All papers</option><option>Ready</option><option>Processing</option></select></div>{error && <p className="form-error" role="alert">{error}</p>}<div className="paper-summary"><div><span className="eyebrow">LIBRARY</span><strong>{filtered.length} papers</strong></div><span>Live data · updated just now</span></div><div className="paper-table"><div className="paper-table-head"><span>Paper</span><span>Collection</span><span>Pages</span><span>Status</span><span>Added</span><span /></div>{filtered.map(p => <Link className="paper-row" to={`/papers/${p.id}`} key={p.id}><span className="paper-info"><span className="paper-icon" style={{ background: p.color }}><FileText size={18} /></span><span><strong>{p.title}</strong><small>{p.authors} · {p.journal}, {p.year}</small></span></span><span className="collection-cell"><Folder size={14} />{p.collection}</span><span className="muted-cell">{p.pages || '—'} pages</span><StatusDot status={p.status} /><span className="muted-cell">{p.added}</span><ArrowUpRight size={16} className="row-arrow" /></Link>)}</div></div> }
+function Papers({ onMenu }: { onMenu: () => void }) {
+  const [query, setQuery] = useState('')
+  const [remote, setRemote] = useState<typeof papers | null>(null)
+  const [error, setError] = useState('')
+  const loadPapers = () => {
+    void api('/api/v1/papers')
+      .then((payload) => setRemote(payload.items.map(toUiPaper)))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Unable to load papers'))
+  }
+  useEffect(() => {
+    loadPapers()
+    const handleAdded = () => loadPapers()
+    window.addEventListener('research-rag-paper-added', handleAdded)
+    return () => window.removeEventListener('research-rag-paper-added', handleAdded)
+  }, [])
+  const source = remote || papers
+  const filtered = useMemo(() => source.filter(p => `${p.title} ${p.authors}`.toLowerCase().includes(query.toLowerCase())), [query, source])
+  return <div className="page-content"><Topbar title="Papers" subtitle="Your research library, ready for grounded answers." onMenu={onMenu} /><div className="library-toolbar"><div className="search-field"><Search size={16} /><input aria-label="Search papers" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search papers, authors, DOI..." /></div><button className="filter-button"><SlidersHorizontal size={15} /> Filters</button><select aria-label="Filter papers"><option>All papers</option><option>Ready</option><option>Processing</option></select></div>{error && <p className="form-error" role="alert">{error}</p>}<div className="paper-summary"><div><span className="eyebrow">LIBRARY</span><strong>{filtered.length} papers</strong></div><span>Live data · updated just now</span></div><div className="paper-table"><div className="paper-table-head"><span>Paper</span><span>Collection</span><span>Pages</span><span>Status</span><span>Added</span><span /></div>{filtered.map(p => <Link className="paper-row" to={`/papers/${p.id}`} key={p.id}><span className="paper-info"><span className="paper-icon" style={{ background: p.color }}><FileText size={18} /></span><span><strong>{p.title}</strong><small>{p.authors} · {p.journal}, {p.year}</small></span></span><span className="collection-cell"><Folder size={14} />{p.collection}</span><span className="muted-cell">{p.pages || '—'} pages</span><StatusDot status={p.status} /><span className="muted-cell">{p.added}</span><ArrowUpRight size={16} className="row-arrow" /></Link>)}</div></div>
+}
 
 function DocumentsPage({ onMenu }: { onMenu: () => void }) {
   const location = useLocation()
@@ -1010,10 +1049,18 @@ function DocumentsPage({ onMenu }: { onMenu: () => void }) {
   const [error, setError] = useState('')
   const [removedRemoteIds, setRemovedRemoteIds] = useState<string[]>([])
 
-  useEffect(() => {
+  const refreshPapers = () => {
     void api('/api/v1/papers')
       .then((payload) => setRemote(payload.items.map(toUiPaper)))
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Unable to load papers'))
+    setLocalPapers(readLocalPapers())
+  }
+
+  useEffect(() => {
+    refreshPapers()
+    const handleAdded = () => refreshPapers()
+    window.addEventListener('research-rag-paper-added', handleAdded)
+    return () => window.removeEventListener('research-rag-paper-added', handleAdded)
   }, [])
 
   useEffect(() => {
@@ -1163,10 +1210,15 @@ function Processing({ onMenu }: { onMenu: () => void }) {
 
   useEffect(() => {
     void fetchRuns()
+    const handleAdded = () => void fetchRuns()
+    window.addEventListener('research-rag-paper-added', handleAdded)
     const interval = setInterval(() => {
       void fetchRuns()
     }, 4000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('research-rag-paper-added', handleAdded)
+    }
   }, [])
 
   const totalRuns = runs.length

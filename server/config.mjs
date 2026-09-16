@@ -1,4 +1,5 @@
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 
 const asInt = (value, fallback) => {
   const parsed = Number.parseInt(value ?? '', 10)
@@ -23,7 +24,17 @@ export const config = {
   demoUserId: process.env.DEMO_USER_ID || '00000000-0000-4000-8000-000000000001',
   maxJsonBytes: asInt(process.env.MAX_JSON_BYTES, 1_000_000),
   maxUploadBytes: asInt(process.env.MAX_UPLOAD_BYTES, 50 * 1024 * 1024),
-  localStorageDir: join(process.cwd(), process.env.LOCAL_STORAGE_DIR || 'storage'),
+  localStorageDir: (() => {
+    if (process.env.LOCAL_STORAGE_DIR) {
+      return isAbsolute(process.env.LOCAL_STORAGE_DIR)
+        ? process.env.LOCAL_STORAGE_DIR
+        : resolve(process.cwd(), process.env.LOCAL_STORAGE_DIR)
+    }
+    if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+      return join(tmpdir(), 'research-rag-storage')
+    }
+    return join(process.cwd(), 'storage')
+  })(),
   s3Endpoint: process.env.S3_ENDPOINT || '',
   s3Region: process.env.S3_REGION || 'us-east-1',
   s3Bucket: process.env.S3_BUCKET || '',
