@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { extname, join, normalize } from 'node:path'
+import { extname, join, normalize, resolve, sep } from 'node:path'
 import pino from 'pino'
 import { z } from 'zod'
 import { config as defaultConfig } from './config.mjs'
@@ -184,7 +184,7 @@ export const createApp = (overrides = {}) => {
       }
 
       if (request.method !== 'GET' && request.method !== 'HEAD') return sendJson(response, 405, { ok: false, error: { code: 'method_not_allowed', message: 'Method not allowed', requestId } })
-      const dist = join(process.cwd(), 'dist'); const relative = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, ''); const candidate = normalize(join(dist, relative)); const safe = candidate === dist || candidate.startsWith(`${dist}/`); const requested = safe ? candidate : join(dist, 'index.html'); let filePath = requested
+      const dist = resolve(process.cwd(), 'dist'); const relative = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, ''); const candidate = resolve(dist, relative); const safe = candidate === dist || candidate.startsWith(`${dist}${sep}`); const requested = safe ? candidate : join(dist, 'index.html'); let filePath = requested
       try { if (!(await stat(filePath)).isFile()) filePath = join(dist, 'index.html') } catch { filePath = join(dist, 'index.html') }
       const contentTypes = { '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon' }
       response.writeHead(200, { 'content-type': contentTypes[extname(filePath)] || 'application/octet-stream', 'cache-control': filePath.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable' })
