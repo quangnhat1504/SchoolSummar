@@ -40,7 +40,13 @@ const sendJson = (response, status, payload, headers = {}) => {
 }
 const parseLimit = (value, fallback = 50) => Math.min(Math.max(Number.parseInt(value || fallback, 10) || fallback, 1), 100)
 const pathParts = (pathname) => pathname.split('/').filter(Boolean)
-const readJson = async (request, maxBytes) => { let size = 0; const chunks = []; for await (const chunk of request) { size += chunk.length; if (size > maxBytes) throw new ApiError(413, 'payload_too_large', 'JSON body exceeds the configured limit'); chunks.push(chunk) } if (!chunks.length) return {}; try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw badRequest('Request body must be valid JSON') } }
+const readJson = async (request, maxBytes) => {
+  if (request.body && typeof request.body === 'object') return request.body
+  if (typeof request.body === 'string') {
+    try { return JSON.parse(request.body) } catch {}
+  }
+  let size = 0; const chunks = []; for await (const chunk of request) { size += chunk.length; if (size > maxBytes) throw new ApiError(413, 'payload_too_large', 'JSON body exceeds the configured limit'); chunks.push(chunk) } if (!chunks.length) return {}; try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw badRequest('Request body must be valid JSON') }
+}
 const publicPaper = (paper) => ({ ...paper, status: paper.status === 'uploaded' ? 'Uploaded' : paper.status === 'processing' ? 'Processing' : paper.status === 'ready' ? 'Ready' : paper.status === 'failed' ? 'Failed' : paper.status })
 const publicUser = (user) => ({ id: user.id, email: user.email || null, displayName: user.displayName || 'Researcher' })
 
@@ -89,7 +95,7 @@ export const createApp = (overrides = {}) => {
   const memoryClient = overrides.memoryClient || createAgentMemoryClient(config, logger)
   const hub = overrides.hub || new RealtimeHub({ authenticate: (request, url) => resolveIdentity(request, config, store, url), logger })
 
-  const server = createServer(async (request, response) => {
+  const requestHandler = async (request, response) => {
     const requestId = request.headers['x-request-id'] || randomUUID()
     const requestUrl = new URL(request.url || '/', config.appUrl)
     const origin = request.headers.origin || '*'
@@ -190,8 +196,9 @@ export const createApp = (overrides = {}) => {
       logger[status >= 500 ? 'error' : 'warn']({ error: normalizedError, requestId, method: request.method, path: requestUrl.pathname }, 'request failed')
       return sendJson(response, status, errorPayload(normalizedError, requestId))
     }
-  })
+  }
 
+  const server = createServer(requestHandler)
   hub.attach(server)
-  return { config, server, store, objectStore, hub, llm, logger, embedder, vectorStore, memoryClient }
+  return { config, server, store, objectStore, hub, llm, logger, embedder, vectorStore, memoryClient, handler: requestHandler }
 }

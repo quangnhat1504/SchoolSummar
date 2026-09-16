@@ -1,0 +1,12 @@
+.venv*
+venv*
+data/
+benchmark/
+raw/
+wiki/
+storage/
+*.pt
+*.onnx
+*.bin
+*.log
+.agent_scratchpad.md
