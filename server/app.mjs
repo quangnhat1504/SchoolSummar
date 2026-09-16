@@ -179,7 +179,24 @@ export const createApp = (overrides = {}) => {
         if (method === 'POST' && requestUrl.pathname === '/api/v1/sessions') { const body = sessionInput.parse(await readJson(request, config.maxJsonBytes)); const session = await store.createSession(identity.userId, body.title || null, body.project || null); return sendJson(response, 201, { ok: true, data: session }) }
         if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'GET') return sendJson(response, 200, { ok: true, data: await store.listMessages(identity.userId, parts[3]) })
         if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'POST') { const body = messageInput.parse(await readJson(request, config.maxJsonBytes)); const userMessage = await store.addMessage(identity.userId, parts[3], { role: 'user', content: body.content }); void queueChat({ store, hub, identity, sessionId: parts[3], userMessage, question: body.content, scope: body.scope, config, llm, logger, vectorStore, embedder, memoryClient }); return sendJson(response, 202, { ok: true, data: { message: userMessage, status: 'queued' } }) }
-        if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'files' && parts[3] && method === 'GET' && objectStore.kind === 'local') { const objectKey = decodeURIComponent(parts.slice(3).join('/')); const filePath = join(config.localStorageDir, objectKey); try { const metadata = await stat(filePath); response.writeHead(200, { 'content-type': 'application/pdf', 'content-length': metadata.size, 'cache-control': 'private, max-age=60' }); return objectStore.stream(objectKey).pipe(response) } catch { throw notFound('File not found') } }
+        if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'files' && parts[3] && method === 'GET') {
+          const objectKey = decodeURIComponent(parts.slice(3).join('/'))
+          if (objectStore.kind === 'supabase' || objectStore.kind === 's3') {
+            const fileUrl = await objectStore.signedUrl(objectKey)
+            response.writeHead(302, { Location: fileUrl })
+            return response.end()
+          }
+          if (objectStore.kind === 'local') {
+            const filePath = join(config.localStorageDir, objectKey)
+            try {
+              const metadata = await stat(filePath)
+              response.writeHead(200, { 'content-type': 'application/pdf', 'content-length': metadata.size, 'cache-control': 'private, max-age=60' })
+              return objectStore.stream(objectKey).pipe(response)
+            } catch {
+              throw notFound('File not found')
+            }
+          }
+        }
         return sendJson(response, 404, errorPayload(notFound('API route not found'), requestId), { 'cache-control': 'no-store' })
       }
 
