@@ -62,10 +62,21 @@ export class QdrantVectorStore {
     }
   }
 
-  async upsertChunks(chunks, collection = this.collection) {
-    if (!chunks || chunks.length === 0) return { count: 0 }
+  async upsert(points, collection = this.collection) {
+    if (!points || points.length === 0) return { count: 0 }
     await this.ensureCollection(collection)
 
+    const batchSize = 100
+    for (let i = 0; i < points.length; i += batchSize) {
+      const batch = points.slice(i, i + batchSize)
+      await this.request(`/collections/${collection}/points?wait=true`, 'PUT', { points: batch })
+    }
+
+    return { count: points.length }
+  }
+
+  async upsertChunks(chunks, collection = this.collection) {
+    if (!chunks || chunks.length === 0) return { count: 0 }
     const points = chunks.map((chunk) => ({
       id: chunk.id,
       vector: chunk.vector,
@@ -81,19 +92,23 @@ export class QdrantVectorStore {
         metadata: chunk.metadata || {}
       }
     }))
-
-    const batchSize = 100
-    for (let i = 0; i < points.length; i += batchSize) {
-      const batch = points.slice(i, i + batchSize)
-      await this.request(`/collections/${collection}/points?wait=true`, 'PUT', { points: batch })
-    }
-
-    return { count: points.length }
+    return this.upsert(points, collection)
   }
 
-  async search(queryVector, options = {}) {
-    const opts = typeof options === 'number' ? { limit: options } : (options || {})
-    const { ownerId, paperId, limit = 8, collection = this.collection } = opts
+  async search(arg1, arg2, arg3) {
+    let queryVector
+    let options = {}
+
+    // Support both search(queryVector, options) and search(ownerId, queryVector, options)
+    if (typeof arg1 === 'string' && Array.isArray(arg2)) {
+      queryVector = arg2
+      options = typeof arg3 === 'number' ? { limit: arg3, ownerId: arg1 } : { ...(arg3 || {}), ownerId: arg1 }
+    } else {
+      queryVector = arg1
+      options = typeof arg2 === 'number' ? { limit: arg2 } : (arg2 || {})
+    }
+
+    const { ownerId, paperId, limit = 8, minScore = 0, collection = this.collection } = options
     const filterMust = []
     if (ownerId) {
       filterMust.push({ key: 'ownerId', match: { value: ownerId } })
@@ -113,7 +128,10 @@ export class QdrantVectorStore {
     }
 
     const res = await this.request(`/collections/${collection}/points/search`, 'POST', payload)
-    const matches = res.result || []
+    let matches = res.result || []
+    if (minScore > 0) {
+      matches = matches.filter((m) => Number(m.score || 0) >= minScore)
+    }
 
     return matches.map((match) => ({
       paperId: match.payload?.paperId || match.payload?.document_id,

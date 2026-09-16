@@ -1,4 +1,28 @@
-const splitForStream = (text, size = 42) => text.match(new RegExp(`.{1,${size}}(?:\\s|$)|.{1,${size}}`, 'g')) || [text]
+export const splitForStream = (text, size = 42) => {
+  if (!text) return []
+  const chunks = []
+  let remaining = text
+  while (remaining.length > 0) {
+    if (remaining.length <= size) {
+      chunks.push(remaining)
+      break
+    }
+    let splitIdx = -1
+    for (let i = Math.min(size, remaining.length - 1); i >= Math.floor(size / 3); i -= 1) {
+      const char = remaining[i]
+      if (char === ' ' || char === '\n' || char === '\t') {
+        splitIdx = i + 1
+        break
+      }
+    }
+    if (splitIdx === -1) {
+      splitIdx = size
+    }
+    chunks.push(remaining.slice(0, splitIdx))
+    remaining = remaining.slice(splitIdx)
+  }
+  return chunks
+}
 
 const demoAnswer = (question, sources) => {
   if (!sources.length) return `I could not find a grounded passage for “${question}” in the active paper set. Try naming a paper, adding a more specific term, or uploading another source.`
@@ -66,18 +90,27 @@ export const answerQuestion = async (config, store, ownerId, question, scope, ll
   if (vectorStore && embedder && embedder.isConfigured) {
     try {
       const queryVector = await embedder.embedQuery(question)
-      const vectorResults = await vectorStore.search(queryVector, config.rerankTopK || 8)
+      const minScore = Number(config.ragMinSimilarityScore || 0.60)
+      const vectorResults = await vectorStore.search(queryVector, {
+        limit: config.rerankTopK || 8,
+        minScore,
+        ownerId,
+        paperId: scope?.paperId,
+      })
       if (Array.isArray(vectorResults) && vectorResults.length > 0) {
-        sources = vectorResults.map((r) => ({
-          paperId: r.paperId || (r.payload && r.payload.paperId) || '',
-          processingRunId: r.processingRunId || (r.payload && r.payload.processingRunId) || '',
-          chunkId: r.chunkId || r.id || '',
-          title: r.title || (r.payload && r.payload.title) || 'Research Paper',
-          text: r.text || (r.payload && r.payload.text) || '',
-          pageStart: r.pageStart || (r.payload && r.payload.pageStart) || 1,
-          pageEnd: r.pageEnd || (r.payload && r.payload.pageEnd) || 1,
-          score: Number(r.score || 0),
-        }))
+        sources = vectorResults
+          .filter((r) => Number(r.score || 0) >= minScore)
+          .map((r) => ({
+            paperId: r.paperId || (r.payload && r.payload.paperId) || '',
+            processingRunId: r.processingRunId || (r.payload && r.payload.processingRunId) || '',
+            chunkId: r.chunkId || r.id || '',
+            title: r.title || (r.payload && r.payload.title) || 'Research Paper',
+            text: r.text || (r.payload && r.payload.text) || '',
+            pageStart: r.pageStart || (r.payload && r.payload.pageStart) || 1,
+            pageEnd: r.pageEnd || (r.payload && r.payload.pageEnd) || 1,
+            score: Number(r.score || 0),
+          }))
+          .filter((r) => r.text && r.text.trim().length > 0)
       }
     } catch {
       // Gracefully fallback to relational/memory store

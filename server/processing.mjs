@@ -12,7 +12,8 @@ export const processRun = async ({ store, hub, ownerId, run, jobs, logger, docli
     if (vectorStore && embedder && embedder.isConfigured && document.chunks?.length) {
       try {
         const texts = document.chunks.map((c) => c.text)
-        const vectors = await embedder.embedBatch(texts)
+        const embedFn = typeof embedder.embedBatch === 'function' ? embedder.embedBatch.bind(embedder) : embedder.embedTexts.bind(embedder)
+        const vectors = await embedFn(texts)
         const points = document.chunks.map((chunk, idx) => ({
           id: chunk.id,
           vector: vectors[idx],
@@ -27,7 +28,11 @@ export const processRun = async ({ store, hub, ownerId, run, jobs, logger, docli
             ownerId,
           },
         }))
-        await vectorStore.upsert(points)
+        if (typeof vectorStore.upsert === 'function') {
+          await vectorStore.upsert(points)
+        } else if (typeof vectorStore.upsertChunks === 'function') {
+          await vectorStore.upsertChunks(points)
+        }
       } catch (err) {
         logger?.warn?.({ error: err.message }, 'Failed to upsert chunks to vectorStore, continuing...')
       }

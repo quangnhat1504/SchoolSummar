@@ -97,6 +97,10 @@ export class CloudflareEmbeddingProvider {
     return vectors[0] || []
   }
 
+  async embedBatch(texts) {
+    return this.embedTexts(texts)
+  }
+
   /**
    * Pad or truncate vector to target dimension
    */
@@ -223,6 +227,10 @@ export class LocalEmbeddingProvider {
   async embedQuery(query) {
     const vectors = await this.embedTexts([query])
     return vectors[0] || []
+  }
+
+  async embedBatch(texts) {
+    return this.embedTexts(texts)
   }
 }
 

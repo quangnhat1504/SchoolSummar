@@ -325,7 +325,20 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
           const message = JSON.parse(event.data)
           if (message.type === 'chat.started') setSending(true)
           if (message.type === 'chat.delta') setMessages((current) => { const found = current.find((item) => item.id === message.payload.messageId); if (found) return current.map((item) => item.id === found.id ? { ...item, content: item.content + message.payload.delta } : item); return [...current, { id: message.payload.messageId, role: 'assistant', content: message.payload.delta }] })
-          if (message.type === 'chat.completed' || message.type === 'chat.failed') setSending(false)
+          if (message.type === 'chat.completed') {
+            setSending(false)
+            if (message.payload?.message?.id && message.payload?.message?.content) {
+              const fullMsg = message.payload.message
+              setMessages((current) => {
+                const found = current.find((item) => item.id === fullMsg.id)
+                if (found) {
+                  return current.map((item) => item.id === fullMsg.id ? { ...item, content: fullMsg.content, citations: fullMsg.citations } : item)
+                }
+                return [...current, { id: fullMsg.id, role: 'assistant', content: fullMsg.content, citations: fullMsg.citations }]
+              })
+            }
+          }
+          if (message.type === 'chat.failed') setSending(false)
         }
       } catch (loadError) { if (!disposed) setError(loadError instanceof Error ? loadError.message : 'Unable to connect to the research backend') }
     }
