@@ -50,7 +50,9 @@ const readJson = async (request, maxBytes) => {
 const publicPaper = (paper) => ({ ...paper, status: paper.status === 'uploaded' ? 'Uploaded' : paper.status === 'processing' ? 'Processing' : paper.status === 'ready' ? 'Ready' : paper.status === 'failed' ? 'Failed' : paper.status })
 const publicUser = (user) => ({ id: user.id, email: user.email || null, displayName: user.displayName || 'Researcher' })
 
-const startProcessing = (store, hub, identity, result, logger, docling, vectorStore, embedder, input = {}) => { void processRun({ store, hub, ownerId: identity.userId, run: result.run, jobs: result.jobs, logger, docling, vectorStore, embedder, ...input }) }
+const startProcessing = async (store, hub, identity, result, logger, docling, vectorStore, embedder, input = {}) => {
+  return processRun({ store, hub, ownerId: identity.userId, run: result.run, jobs: result.jobs, logger, docling, vectorStore, embedder, ...input })
+}
 
 const resolveIdentity = async (request, config, store, requestUrl) => {
   const identity = getRequestIdentity(request, config, requestUrl)
@@ -75,11 +77,15 @@ const queueChat = async ({ store, hub, identity, sessionId, userMessage, questio
     const assistant = await store.addMessage(identity.userId, sessionId, { role: 'assistant', content: answer.text, model: answer.provider ? `${answer.provider}:${answer.model}` : answer.mode, metadata: { retrievalMode: answer.mode, sourceCount: answer.sources.length, provider: answer.provider, model: answer.model, memoryRecalled: answer.recalledMemory } })
     if (answer.sources.length) await store.addCitations(identity.userId, assistant.id, answer.sources)
     await streamAnswer(answer, async (delta) => hub.publish(identity.userId, 'chat.delta', { sessionId, messageId: assistant.id, delta }))
-    hub.publish(identity.userId, 'chat.completed', { sessionId, message: { ...assistant, citations: answer.sources } })
+    const completedMsg = { ...assistant, citations: answer.sources }
+    hub.publish(identity.userId, 'chat.completed', { sessionId, message: completedMsg })
     void memoryClient?.capture({ userContent: question, assistantContent: answer.text, sessionKey: sessionId || identity.userId, userId: identity.userId }).catch(() => {})
+    return completedMsg
   } catch (error) {
     logger.error({ error, sessionId }, 'chat generation failed')
+    const failedMsg = { role: 'assistant', content: 'Unable to generate an answer. Please retry.' }
     hub.publish(identity.userId, 'chat.failed', { sessionId, messageId: userMessage.id, message: 'Unable to generate an answer. Please retry.' })
+    return failedMsg
   }
 }
 
@@ -149,7 +155,7 @@ export const createApp = (overrides = {}) => {
           return sendJson(response, 200, { ok: true, data: { ...result, items: result.items.map(publicPaper) } })
         }
         if (method === 'POST' && requestUrl.pathname === '/api/v1/papers') {
-          const input = paperInput.parse(await readJson(request, config.maxJsonBytes)); const paper = await store.createPaper(identity.userId, input); const run = await store.createProcessingRun(identity.userId, paper.id); startProcessing(store, hub, identity, run, logger, docling, vectorStore, embedder, { filename: `${paper.title}.pdf`, sha256: input.sha256, metadata: input.metadata }); hub.publish(identity.userId, 'paper.created', { paper: publicPaper(paper) }); return sendJson(response, 202, { ok: true, data: { paper: publicPaper(paper), processingRun: run.run } })
+          const input = paperInput.parse(await readJson(request, config.maxJsonBytes)); const paper = await store.createPaper(identity.userId, input); const run = await store.createProcessingRun(identity.userId, paper.id); await startProcessing(store, hub, identity, run, logger, docling, vectorStore, embedder, { filename: `${paper.title}.pdf`, sha256: input.sha256, metadata: input.metadata }); hub.publish(identity.userId, 'paper.created', { paper: publicPaper({ ...paper, status: 'ready' }) }); return sendJson(response, 202, { ok: true, data: { paper: publicPaper({ ...paper, status: 'ready' }), processingRun: { ...run.run, status: 'succeeded' } } })
         }
         if (method === 'POST' && requestUrl.pathname === '/api/v1/papers/upload') {
           const upload = await parsePdfUpload(request, config)
@@ -161,9 +167,9 @@ export const createApp = (overrides = {}) => {
             await objectStore.putFile(upload.tempPath, objectKey, upload.mimeType)
             await store.attachFile(identity.userId, paper.id, { objectKey, fileName: upload.filename, mimeType: upload.mimeType, sizeBytes: upload.sizeBytes, sha256: upload.sha256 })
             const run = await store.createProcessingRun(identity.userId, paper.id)
-            startProcessing(store, hub, identity, run, logger, docling, vectorStore, embedder, { sourcePath: objectStore.kind === 'local' ? join(config.localStorageDir, objectKey) : undefined, filename: upload.filename, sha256: upload.sha256, metadata: paper.metadata })
-            hub.publish(identity.userId, 'paper.created', { paper: publicPaper(paper) })
-            return sendJson(response, 202, { ok: true, data: { paper: publicPaper(paper), processingRun: run.run } })
+            await startProcessing(store, hub, identity, run, logger, docling, vectorStore, embedder, { sourcePath: objectStore.kind === 'local' ? join(config.localStorageDir, objectKey) : undefined, filename: upload.filename, sha256: upload.sha256, metadata: paper.metadata })
+            hub.publish(identity.userId, 'paper.created', { paper: publicPaper({ ...paper, status: 'ready' }) })
+            return sendJson(response, 202, { ok: true, data: { paper: publicPaper({ ...paper, status: 'ready' }), processingRun: { ...run.run, status: 'succeeded' } } })
           } catch (error) {
             if (objectKey) await objectStore.delete(objectKey).catch(() => {})
             if (paper) await store.deletePaper(identity.userId, paper.id).catch(() => {})
@@ -178,7 +184,7 @@ export const createApp = (overrides = {}) => {
         if (method === 'GET' && requestUrl.pathname === '/api/v1/sessions') return sendJson(response, 200, { ok: true, data: await store.listSessions(identity.userId, { project: requestUrl.searchParams.get('project') || '' }) })
         if (method === 'POST' && requestUrl.pathname === '/api/v1/sessions') { const body = sessionInput.parse(await readJson(request, config.maxJsonBytes)); const session = await store.createSession(identity.userId, body.title || null, body.project || null); return sendJson(response, 201, { ok: true, data: session }) }
         if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'GET') return sendJson(response, 200, { ok: true, data: await store.listMessages(identity.userId, parts[3]) })
-        if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'POST') { const body = messageInput.parse(await readJson(request, config.maxJsonBytes)); const userMessage = await store.addMessage(identity.userId, parts[3], { role: 'user', content: body.content }); void queueChat({ store, hub, identity, sessionId: parts[3], userMessage, question: body.content, scope: body.scope, config, llm, logger, vectorStore, embedder, memoryClient }); return sendJson(response, 202, { ok: true, data: { message: userMessage, status: 'queued' } }) }
+        if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'POST') { const body = messageInput.parse(await readJson(request, config.maxJsonBytes)); const userMessage = await store.addMessage(identity.userId, parts[3], { role: 'user', content: body.content }); const assistant = await queueChat({ store, hub, identity, sessionId: parts[3], userMessage, question: body.content, scope: body.scope, config, llm, logger, vectorStore, embedder, memoryClient }); return sendJson(response, 202, { ok: true, data: { message: userMessage, assistant, status: 'completed' } }) }
         if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'files' && parts[3] && method === 'GET') {
           const objectKey = decodeURIComponent(parts.slice(3).join('/'))
           if (objectStore.kind === 'supabase' || objectStore.kind === 's3') {

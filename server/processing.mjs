@@ -2,12 +2,14 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const steps = ['page_render', 'layout', 'ocr', 'chunk', 'embedding']
 
 export const processRun = async ({ store, hub, ownerId, run, jobs, logger, docling, sourcePath, filename, sha256, metadata, vectorStore, embedder }) => {
+  const paperId = run.paperId || run.paper_id
+  const runId = run.id
   try {
-    await store.setRunStatus(ownerId, run.id, 'running')
-    hub.publish(ownerId, 'processing.started', { paperId: run.paperId, runId: run.id })
+    await store.setRunStatus(ownerId, runId, 'running')
+    hub.publish(ownerId, 'processing.started', { paperId, runId })
     const document = await docling.convert({ sourcePath, filename, sha256, metadata })
-    if (store.persistDoclingResult) await store.persistDoclingResult(ownerId, run.paperId, run.id, document)
-    hub.publish(ownerId, 'processing.docling', { paperId: run.paperId, runId: run.id, pages: document.pages.length, chunks: document.chunks.length, blocks: document.layoutBlocks.length })
+    if (store.persistDoclingResult) await store.persistDoclingResult(ownerId, paperId, runId, document)
+    hub.publish(ownerId, 'processing.docling', { paperId, runId, pages: document.pages.length, chunks: document.chunks.length, blocks: document.layoutBlocks.length })
 
     if (vectorStore && embedder && embedder.isConfigured && document.chunks?.length) {
       try {
@@ -18,8 +20,8 @@ export const processRun = async ({ store, hub, ownerId, run, jobs, logger, docli
           id: chunk.id,
           vector: vectors[idx],
           payload: {
-            paperId: run.paperId,
-            processingRunId: run.id,
+            paperId,
+            processingRunId: runId,
             chunkId: chunk.id,
             title: metadata?.title || filename?.replace(/\.pdf$/i, '') || 'Document',
             text: chunk.text,
@@ -38,17 +40,18 @@ export const processRun = async ({ store, hub, ownerId, run, jobs, logger, docli
       }
     }
     for (const [index, job] of jobs.entries()) {
+      const jobType = job.jobType || job.job_type
       await store.setJobStatus(ownerId, job.id, 'running')
-      hub.publish(ownerId, 'processing.updated', { paperId: run.paperId, runId: run.id, jobType: job.jobType, status: 'running', progress: Math.round((index / steps.length) * 100) })
-      await delay(90)
+      hub.publish(ownerId, 'processing.updated', { paperId, runId, jobType, status: 'running', progress: Math.round((index / steps.length) * 100) })
+      await delay(50)
       await store.setJobStatus(ownerId, job.id, 'succeeded')
-      hub.publish(ownerId, 'processing.updated', { paperId: run.paperId, runId: run.id, jobType: job.jobType, status: 'succeeded', progress: Math.round(((index + 1) / steps.length) * 100) })
+      hub.publish(ownerId, 'processing.updated', { paperId, runId, jobType, status: 'succeeded', progress: Math.round(((index + 1) / steps.length) * 100) })
     }
-    await store.setRunStatus(ownerId, run.id, 'succeeded', true)
-    hub.publish(ownerId, 'processing.completed', { paperId: run.paperId, runId: run.id, status: 'ready' })
+    await store.setRunStatus(ownerId, runId, 'succeeded', true)
+    hub.publish(ownerId, 'processing.completed', { paperId, runId, status: 'ready' })
   } catch (error) {
-    logger.error({ error, runId: run.id }, 'processing run failed')
-    try { await store.setRunStatus(ownerId, run.id, 'failed') } catch {}
-    hub.publish(ownerId, 'processing.failed', { paperId: run.paperId, runId: run.id, status: 'failed', message: error.message })
+    logger.error({ error, runId }, 'processing run failed')
+    try { await store.setRunStatus(ownerId, runId, 'failed') } catch {}
+    hub.publish(ownerId, 'processing.failed', { paperId, runId, status: 'failed', message: error.message })
   }
 }

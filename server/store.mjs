@@ -295,16 +295,104 @@ export class PostgresStore {
   async createProcessingRun(ownerId, paperId) {
     return this.withTx(ownerId, async (client) => {
       const { rows } = await client.query('INSERT INTO processing_runs (owner_id,paper_id,pipeline_version,status) VALUES ($1,$2,$3,$4) RETURNING id,owner_id,paper_id,status,is_active,pipeline_version,created_at,updated_at', [ownerId, paperId, 'v1', 'queued'])
-      const run = rows[0]; const jobs = []
-      for (const jobType of ['page_render', 'layout', 'ocr', 'chunk', 'embedding']) { const result = await client.query('INSERT INTO pipeline_jobs (owner_id,paper_id,processing_run_id,job_type) VALUES ($1,$2,$3,$4) RETURNING id,job_type,status,attempts,created_at,updated_at', [ownerId, paperId, run.id, jobType]); jobs.push(result.rows[0]) }
+      const rawRun = rows[0]
+      const run = {
+        id: rawRun.id,
+        ownerId: rawRun.owner_id,
+        paperId: rawRun.paper_id,
+        paper_id: rawRun.paper_id,
+        status: rawRun.status,
+        isActive: rawRun.is_active,
+        pipelineVersion: rawRun.pipeline_version,
+        createdAt: rawRun.created_at?.toISOString?.() || rawRun.created_at,
+        updatedAt: rawRun.updated_at?.toISOString?.() || rawRun.updated_at,
+      }
+      const jobs = []
+      for (const jobType of ['page_render', 'layout', 'ocr', 'chunk', 'embedding']) {
+        const result = await client.query('INSERT INTO pipeline_jobs (owner_id,paper_id,processing_run_id,job_type) VALUES ($1,$2,$3,$4) RETURNING id,job_type,status,attempts,created_at,updated_at', [ownerId, paperId, run.id, jobType])
+        const j = result.rows[0]
+        jobs.push({
+          id: j.id,
+          jobType: j.job_type,
+          job_type: j.job_type,
+          status: j.status,
+          attempts: j.attempts,
+          createdAt: j.created_at?.toISOString?.() || j.created_at,
+          updatedAt: j.updated_at?.toISOString?.() || j.updated_at,
+        })
+      }
       await client.query('UPDATE papers SET status=$1 WHERE owner_id=$2 AND id=$3', ['processing', ownerId, paperId])
       return { run, jobs }
     })
   }
 
-  async setRunStatus(ownerId, runId, status, isActive = false) { return this.withTx(ownerId, async (client) => { const { rows } = await client.query('UPDATE processing_runs SET status=$1,is_active=$2,started_at=CASE WHEN $1=$3 AND started_at IS NULL THEN now() ELSE started_at END,completed_at=CASE WHEN $1 IN ($4,$5,$6) THEN now() ELSE completed_at END WHERE owner_id=$7 AND id=$8 RETURNING *', [status, isActive, 'running', 'succeeded', 'failed', 'cancelled', ownerId, runId]); if (!rows[0]) throw notFound('Processing run not found'); if (status === 'succeeded') await client.query('UPDATE papers SET status=$1 WHERE owner_id=$2 AND id=$3', ['ready', ownerId, rows[0].paper_id]); return rows[0] }) }
-  async setJobStatus(ownerId, jobId, status) { return this.withTx(ownerId, async (client) => { const { rows } = await client.query('UPDATE pipeline_jobs SET status=$1,attempts=attempts+CASE WHEN $1=$2 THEN 1 ELSE 0 END,started_at=CASE WHEN $1=$2 THEN now() ELSE started_at END,completed_at=CASE WHEN $1 IN ($3,$4,$5) THEN now() ELSE completed_at END WHERE owner_id=$6 AND id=$7 RETURNING *', [status, 'running', 'succeeded', 'failed', 'cancelled', ownerId, jobId]); if (!rows[0]) throw notFound('Pipeline job not found'); return rows[0] }) }
-  async listProcessing(ownerId) { const { rows } = await this.pool.query('SELECT r.*, p.title, p.authors, p.status AS paper_status FROM processing_runs r JOIN papers p ON p.owner_id=r.owner_id AND p.id=r.paper_id WHERE r.owner_id=$1 ORDER BY r.created_at DESC', [ownerId]); return Promise.all(rows.map(async (run) => ({ ...run, jobs: (await this.pool.query('SELECT * FROM pipeline_jobs WHERE owner_id=$1 AND processing_run_id=$2 ORDER BY created_at', [ownerId, run.id])).rows }))) }
+  async setRunStatus(ownerId, runId, status, isActive = false) {
+    return this.withTx(ownerId, async (client) => {
+      const { rows } = await client.query('UPDATE processing_runs SET status=$1,is_active=$2,started_at=CASE WHEN $1=$3 AND started_at IS NULL THEN now() ELSE started_at END,completed_at=CASE WHEN $1 IN ($4,$5,$6) THEN now() ELSE completed_at END WHERE owner_id=$7 AND id=$8 RETURNING *', [status, isActive, 'running', 'succeeded', 'failed', 'cancelled', ownerId, runId])
+      if (!rows[0]) throw notFound('Processing run not found')
+      if (status === 'succeeded') await client.query('UPDATE papers SET status=$1 WHERE owner_id=$2 AND id=$3', ['ready', ownerId, rows[0].paper_id])
+      const raw = rows[0]
+      return {
+        ...raw,
+        paperId: raw.paper_id,
+        isActive: raw.is_active,
+        pipelineVersion: raw.pipeline_version,
+      }
+    })
+  }
+
+  async setJobStatus(ownerId, jobId, status) {
+    return this.withTx(ownerId, async (client) => {
+      const { rows } = await client.query('UPDATE pipeline_jobs SET status=$1,attempts=attempts+CASE WHEN $1=$2 THEN 1 ELSE 0 END,started_at=CASE WHEN $1=$2 THEN now() ELSE started_at END,completed_at=CASE WHEN $1 IN ($3,$4,$5) THEN now() ELSE completed_at END WHERE owner_id=$6 AND id=$7 RETURNING *', [status, 'running', 'succeeded', 'failed', 'cancelled', ownerId, jobId])
+      if (!rows[0]) throw notFound('Pipeline job not found')
+      const raw = rows[0]
+      return {
+        ...raw,
+        jobType: raw.job_type,
+      }
+    })
+  }
+
+  async listProcessing(ownerId) {
+    const { rows } = await this.pool.query('SELECT r.*, p.title, p.authors, p.doi, p.source, p.status AS paper_status, p.metadata AS paper_metadata, p.created_at AS paper_created_at, p.updated_at AS paper_updated_at FROM processing_runs r JOIN papers p ON p.owner_id=r.owner_id AND p.id=r.paper_id WHERE r.owner_id=$1 ORDER BY r.created_at DESC', [ownerId])
+    return Promise.all(rows.map(async (run) => {
+      const jobsRes = await this.pool.query('SELECT * FROM pipeline_jobs WHERE owner_id=$1 AND processing_run_id=$2 ORDER BY created_at', [ownerId, run.id])
+      const jobs = jobsRes.rows.map(j => ({
+        id: j.id,
+        ownerId: j.owner_id,
+        paperId: j.paper_id,
+        processingRunId: j.processing_run_id,
+        jobType: j.job_type,
+        status: j.status,
+        attempts: j.attempts,
+        createdAt: j.created_at?.toISOString?.() || j.created_at,
+        updatedAt: j.updated_at?.toISOString?.() || j.updated_at
+      }))
+      const paper = normalizePaper({
+        id: run.paper_id,
+        title: run.title,
+        authors: run.authors,
+        doi: run.doi,
+        source: run.source,
+        status: run.paper_status,
+        metadata: run.paper_metadata || {},
+        createdAt: run.paper_created_at?.toISOString?.() || run.paper_created_at,
+        updatedAt: run.paper_updated_at?.toISOString?.() || run.paper_updated_at
+      })
+      return {
+        id: run.id,
+        ownerId: run.owner_id,
+        paperId: run.paper_id,
+        pipelineVersion: run.pipeline_version,
+        status: run.status,
+        isActive: run.is_active,
+        createdAt: run.created_at?.toISOString?.() || run.created_at,
+        updatedAt: run.updated_at?.toISOString?.() || run.updated_at,
+        paper,
+        jobs
+      }
+    }))
+  }
   async createSession(ownerId, title = null, project = null) { const { rows } = await this.pool.query('INSERT INTO chat_sessions(owner_id,project_key,title) VALUES($1,$2,$3) RETURNING id,owner_id,project_key AS project,title,created_at,updated_at', [ownerId, project || 'memory-cognition', title || 'New research thread']); return rows[0] }
   async listSessions(ownerId, { project = '' } = {}) { const values = [ownerId]; const where = ['owner_id=$1']; if (project) { values.push(project); where.push(`project_key=$${values.length}`) } values.push(100); return (await this.pool.query(`SELECT id,owner_id,project_key AS project,title,created_at,updated_at FROM chat_sessions WHERE ${where.join(' AND ')} ORDER BY updated_at DESC LIMIT $${values.length}`, values)).rows }
   async getSession(ownerId, sessionId) { const { rows } = await this.pool.query('SELECT id,owner_id,title,created_at,updated_at FROM chat_sessions WHERE owner_id=$1 AND id=$2', [ownerId, sessionId]); if (!rows[0]) throw notFound('Chat session not found'); return rows[0] }

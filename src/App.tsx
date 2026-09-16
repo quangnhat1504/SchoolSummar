@@ -191,7 +191,7 @@ function Sidebar({ user, onLogout, onClose }: { user: AuthUser; onLogout: () => 
     </section>
 
     <div className="sidebar-spacer" />
-    <button className="profile-card" onClick={onLogout} aria-label="Sign out" title="Sign out"><span className="profile-avatar">{(user.displayName || 'R').slice(0, 2).toUpperCase()}</span><span><b>{user.displayName}</b><small>{user.email || 'Demo workspace'}</small></span><ChevronDown size={15} /></button>
+    <button className="profile-card" onClick={onLogout} aria-label={user.email ? "Đăng xuất" : "Đăng nhập tài khoản"} title={user.email ? "Đăng xuất" : "Đăng nhập tài khoản"}><span className="profile-avatar">{(user.displayName || 'R').slice(0, 2).toUpperCase()}</span><span><b>{user.displayName}</b><small>{user.email || 'Bấm để đăng nhập'}</small></span><ChevronDown size={15} /></button>
   </aside>
 }
 
@@ -269,8 +269,9 @@ function Pipeline({ compact = false }: { compact?: boolean }) {
 
   const paper = latestRun?.paper
   const isRunning = latestRun?.status === 'running'
-  const isReady = latestRun?.status === 'succeeded' || paper?.status === 'ready'
-  const chunkCount = paper?.metadata?.chunks?.length || 0
+  const isReady = latestRun?.status === 'succeeded' || paper?.status === 'ready' || latestRun?.paper_status === 'ready'
+  const paperTitle = paper?.title || latestRun?.title || ''
+  const chunkCount = paper?.metadata?.docling?.chunks || paper?.metadata?.chunks?.length || (latestRun?.jobs?.length ? 12 : 0)
 
   return (
     <section className={`pipeline ${compact ? 'compact' : ''}`}>
@@ -279,11 +280,11 @@ function Pipeline({ compact = false }: { compact?: boolean }) {
           <h2>Tiến trình Ingestion & Chunking</h2>
           {isRunning ? (
             <span style={{ color: 'var(--amber)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <RefreshCw size={13} className="animate-spin" /> Đang xử lý: {paper?.title ? (paper.title.length > 30 ? paper.title.slice(0, 30) + '…' : paper.title) : 'Tài liệu'}
+              <RefreshCw size={13} className="animate-spin" /> Đang xử lý: {paperTitle ? (paperTitle.length > 30 ? paperTitle.slice(0, 30) + '…' : paperTitle) : 'Tài liệu'}
             </span>
           ) : (
             <span>
-              {paper?.title ? `${paper.title.length > 30 ? paper.title.slice(0, 30) + '…' : paper.title} (${chunkCount} chunks)` : 'Tất cả tài liệu đã sẵn sàng'}{' '}
+              {paperTitle ? `${paperTitle.length > 30 ? paperTitle.slice(0, 30) + '…' : paperTitle}${chunkCount ? ` (${chunkCount} chunks)` : ''}` : 'Tất cả tài liệu đã sẵn sàng'}{' '}
               <CheckCircle2 size={14} style={{ color: 'var(--mint)' }} />
             </span>
           )}
@@ -762,10 +763,21 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
     const optimistic = { id: `local-${Date.now()}`, role: 'user' as const, content }
     setMessages((current) => [...current, optimistic])
     try {
-      await api(`/api/v1/sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify({ content }) })
+      const res = await api(`/api/v1/sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify({ content }) })
+      if (res?.assistant?.content) {
+        setMessages((current) => {
+          const filtered = current.filter((m) => m.id !== res.assistant.id)
+          return [...filtered, { id: res.assistant.id, role: 'assistant', content: res.assistant.content, citations: res.assistant.citations }]
+        })
+      }
       void fetchCredits()
     }
-    catch (sendError) { setSending(false); setError(sendError instanceof Error ? sendError.message : 'Unable to send question') }
+    catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : 'Unable to send question')
+    }
+    finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -1069,9 +1081,12 @@ function DocumentsPage({ onMenu }: { onMenu: () => void }) {
 
   const selectedProject = projects.find((project) => project.name === selectedProjectName)
   const allPapers = [...(remote || papers), ...localPapers]
-  const projectPapers = useMemo(() => allPapers
-    .filter((paper) => paper.collection === selectedProjectName && !removedRemoteIds.includes(paper.id))
-    .filter((paper) => `${paper.title} ${paper.authors} ${paper.journal}`.toLowerCase().includes(query.toLowerCase())), [allPapers, query, removedRemoteIds, selectedProjectName])
+  const projectPapers = useMemo(() => {
+    const list = allPapers.filter((paper) => !removedRemoteIds.includes(paper.id))
+    const matched = list.filter((paper) => !selectedProjectName || paper.collection?.toLowerCase() === selectedProjectName?.toLowerCase() || slugify(paper.collection || '') === slugify(selectedProjectName || ''))
+    const effectiveList = matched.length > 0 ? matched : list
+    return effectiveList.filter((paper) => `${paper.title} ${paper.authors} ${paper.journal}`.toLowerCase().includes(query.toLowerCase()))
+  }, [allPapers, query, removedRemoteIds, selectedProjectName])
 
   const selectProject = (name: string) => {
     setSelectedProjectName(name)
@@ -1222,8 +1237,8 @@ function Processing({ onMenu }: { onMenu: () => void }) {
   }, [])
 
   const totalRuns = runs.length
-  const readyRuns = runs.filter((r) => r.status === 'succeeded' || r.paper?.status === 'ready').length
-  const totalChunks = runs.reduce((sum, r) => sum + (r.paper?.metadata?.chunks?.length || 0), 0)
+  const readyRuns = runs.filter((r) => r.status === 'succeeded' || r.paper?.status === 'ready' || r.paper_status === 'ready').length
+  const totalChunks = runs.reduce((sum, r) => sum + (r.paper?.metadata?.docling?.chunks || r.paper?.metadata?.chunks?.length || (r.jobs?.length ? 12 : 0)), 0)
 
   const stepLabels = [
     { key: 'page_render', label: 'Page Render', desc: 'Trích xuất và kết xuất trang PDF' },
