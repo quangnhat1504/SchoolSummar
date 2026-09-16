@@ -56,7 +56,7 @@ const providerFromConfig = (id, config) => {
   }
   const definition = definitions[id]
   if (!definition?.baseUrl || !definition.model) return null
-  if (id !== 'ollama' && !definition.apiKey) return null
+  if (id !== 'ollama' && id !== 'custom' && !definition.apiKey) return null
   return { id, ...definition }
 }
 
