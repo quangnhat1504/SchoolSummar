@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Activity, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Copy, FileChartColumn, FileText, Folder, FolderOpen, FolderPlus, Grip, History, Menu, MessageCircle, MoreHorizontal, PanelRight, Plus, Search, Send, SlidersHorizontal, Sparkles, ThumbsDown, ThumbsUp, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Activity, AlertCircle, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Copy, FileChartColumn, FileText, Folder, FolderOpen, FolderPlus, Grip, History, Layers, Menu, MessageCircle, MoreHorizontal, PanelRight, Plus, RefreshCw, Search, Send, SlidersHorizontal, Sparkles, ThumbsDown, ThumbsUp, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { Message, MessageContent, MessageResponse } from './components/ai-elements/message'
 import { Conversation, ConversationContent } from './components/ai-elements/conversation'
 import { collections, papers, processingSteps, sourceChunks, type Paper, type PaperStatus, type SourceChunk } from './data'
@@ -146,6 +146,31 @@ function Sidebar({ user, onLogout, onClose }: { user: AuthUser; onLogout: () => 
     <div className="sidebar-top"><Brand />{onClose && <IconButton label="Close menu" onClick={onClose}><X size={18} /></IconButton>}</div>
     <button className="workspace-switcher"><span className="workspace-avatar">QM</span><span><b>Quantum Materials Lab</b><small>Personal workspace</small></span><ChevronDown size={15} /></button>
 
+    <nav className="primary-nav" aria-label="Main Navigation">
+      <Link className={`nav-item ${location.pathname === '/workspace' ? 'active' : ''}`} to="/workspace" onClick={onClose}>
+        <MessageCircle size={15} />
+        <span>Hỏi đáp (Workspace)</span>
+      </Link>
+      <Link className={`nav-item ${location.pathname === '/documents' ? 'active' : ''}`} to="/documents" onClick={onClose}>
+        <FolderOpen size={15} />
+        <span>Tài liệu & Tải lên</span>
+      </Link>
+      <Link className={`nav-item ${location.pathname === '/processing' ? 'active' : ''}`} to="/processing" onClick={onClose}>
+        <FileChartColumn size={15} />
+        <span>Tiến trình Chunking</span>
+      </Link>
+      <Link className={`nav-item ${location.pathname === '/papers' ? 'active' : ''}`} to="/papers" onClick={onClose}>
+        <BookOpen size={15} />
+        <span>Thư viện Papers</span>
+      </Link>
+      <Link className={`nav-item ${location.pathname === '/history' ? 'active' : ''}`} to="/history" onClick={onClose}>
+        <History size={15} />
+        <span>Lịch sử hội thoại</span>
+      </Link>
+    </nav>
+
+    <div className="nav-divider" />
+
     <section className="sidebar-section projects-section" aria-labelledby="projects-label">
       <div className="sidebar-section-heading"><span id="projects-label">Projects</span><IconButton label="Manage projects and documents" onClick={() => { navigate('/documents'); onClose?.() }}><Plus size={15} /></IconButton></div>
       <div className="project-list">
@@ -226,7 +251,359 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => vo
 }
 
 function Topbar({ title, subtitle, action, onMenu }: { title: string; subtitle?: string; action?: React.ReactNode; onMenu?: () => void }) { return <header className="page-topbar"><div className="topbar-title">{onMenu && <IconButton label="Open menu" onClick={onMenu}><Menu size={19} /></IconButton>}<div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div></div>{action}</header> }
-function Pipeline({ compact = false }: { compact?: boolean }) { return <section className={`pipeline ${compact ? 'compact' : ''}`}><div className="pipeline-header"><div><h2>Processing pipeline</h2><span>All up to date <CheckCircle2 size={14} /></span></div><Link to="/processing">View all jobs <ArrowRight size={14} /></Link></div><div className="pipeline-steps">{processingSteps.map((step, i) => <div className="pipeline-step" key={step.label}><div className={`step-icon ${step.icon}`}>{step.icon === 'layout' ? <Grip size={19} /> : step.icon === 'ocr' ? <b className="ocr-icon">T</b> : step.icon === 'chunk' ? <FileChartColumn size={19} /> : <BrainCircuit size={19} />}</div><div><strong>{i + 1}. {step.label}</strong>{!compact && <p>{step.detail}</p>}<span><CheckCircle2 size={13} />{step.status}</span></div>{i < 3 && <i className="step-connector" />}</div>)}</div></section> }
+function Pipeline({ compact = false }: { compact?: boolean }) {
+  const [latestRun, setLatestRun] = useState<any>(null)
+
+  useEffect(() => {
+    let active = true
+    const fetchLatest = () => {
+      void api('/api/v1/processing')
+        .then((runs) => {
+          if (active && Array.isArray(runs) && runs.length > 0) {
+            setLatestRun(runs[0])
+          }
+        })
+        .catch(() => {})
+    }
+    fetchLatest()
+    const interval = setInterval(fetchLatest, 5000)
+    return () => { active = false; clearInterval(interval) }
+  }, [])
+
+  const paper = latestRun?.paper
+  const isRunning = latestRun?.status === 'running'
+  const isReady = latestRun?.status === 'succeeded' || paper?.status === 'ready'
+  const chunkCount = paper?.metadata?.chunks?.length || 0
+
+  return (
+    <section className={`pipeline ${compact ? 'compact' : ''}`}>
+      <div className="pipeline-header">
+        <div>
+          <h2>Tiến trình Ingestion & Chunking</h2>
+          {isRunning ? (
+            <span style={{ color: 'var(--amber)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <RefreshCw size={13} className="animate-spin" /> Đang xử lý: {paper?.title ? (paper.title.length > 30 ? paper.title.slice(0, 30) + '…' : paper.title) : 'Tài liệu'}
+            </span>
+          ) : (
+            <span>
+              {paper?.title ? `${paper.title.length > 30 ? paper.title.slice(0, 30) + '…' : paper.title} (${chunkCount} chunks)` : 'Tất cả tài liệu đã sẵn sàng'}{' '}
+              <CheckCircle2 size={14} style={{ color: 'var(--mint)' }} />
+            </span>
+          )}
+        </div>
+        <Link to="/processing">Xem tất cả tiến trình chunking <ArrowRight size={14} /></Link>
+      </div>
+      <div className="pipeline-steps">
+        {processingSteps.map((step, i) => (
+          <div className="pipeline-step" key={step.label}>
+            <div className={`step-icon ${step.icon}`}>
+              {step.icon === 'layout' ? <Grip size={19} /> : step.icon === 'ocr' ? <b className="ocr-icon">T</b> : step.icon === 'chunk' ? <FileChartColumn size={19} /> : <BrainCircuit size={19} />}
+            </div>
+            <div>
+              <strong>{i + 1}. {step.label}</strong>
+              {!compact && <p>{step.detail}</p>}
+              <span>
+                {isReady ? <CheckCircle2 size={13} /> : isRunning && i < 3 ? <CheckCircle2 size={13} /> : isRunning && i === 3 ? <RefreshCw size={12} className="animate-spin" /> : <Clock size={13} />}
+                {isReady ? 'Hoàn tất' : isRunning && i < 3 ? 'Hoàn tất' : isRunning && i === 3 ? 'Đang chunk' : step.status}
+              </span>
+            </div>
+            {i < 3 && <i className="step-connector" />}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function UploadModal({
+  isOpen,
+  onClose,
+  projects,
+  defaultProjectName,
+  onSuccess,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  projects: Array<{ name: string; accent: string }>
+  defaultProjectName?: string
+  onSuccess?: (paper: any) => void
+}) {
+  const navigate = useNavigate()
+  const [file, setFile] = useState<File | null>(null)
+  const [title, setTitle] = useState('')
+  const [selectedProject, setSelectedProject] = useState(defaultProjectName || projects[0]?.name || 'Memory & cognition')
+  const [isUploading, setIsUploading] = useState(false)
+  const [step, setStep] = useState<'form' | 'uploading' | 'processing' | 'done'>('form')
+  const [progressMsg, setProgressMsg] = useState('')
+  const [error, setError] = useState('')
+  const [uploadedPaper, setUploadedPaper] = useState<any>(null)
+
+  useEffect(() => {
+    if (defaultProjectName) setSelectedProject(defaultProjectName)
+  }, [defaultProjectName])
+
+  if (!isOpen) return null
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0] || null
+    if (selected) {
+      if (!/\.pdf$/i.test(selected.name)) {
+        setError('Vui lòng chọn tệp định dạng PDF.')
+        return
+      }
+      setError('')
+      setFile(selected)
+      if (!title) {
+        setTitle(selected.name.replace(/\.pdf$/i, ''))
+      }
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const dropped = e.dataTransfer.files?.[0] || null
+    if (dropped) {
+      if (!/\.pdf$/i.test(dropped.name)) {
+        setError('Vui lòng chọn tệp định dạng PDF.')
+        return
+      }
+      setError('')
+      setFile(dropped)
+      if (!title) {
+        setTitle(dropped.name.replace(/\.pdf$/i, ''))
+      }
+    }
+  }
+
+  const startUpload = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!file) {
+      setError('Vui lòng chọn 1 tệp PDF.')
+      return
+    }
+    setError('')
+    setIsUploading(true)
+    setStep('uploading')
+    setProgressMsg('Đang tải tệp PDF lên máy chủ...')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('title', title || file.name.replace(/\.pdf$/i, ''))
+      formData.append('collection', selectedProject)
+
+      const res = await api('/api/v1/papers/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      setUploadedPaper(res.paper)
+      setStep('processing')
+      setProgressMsg('Đang phân tích Layout, OCR và thực hiện Chunking...')
+
+      const paperId = res.paper.id
+      let attempts = 0
+      const poll = async () => {
+        try {
+          const procData = await api(`/api/v1/papers/${paperId}/processing`)
+          if (procData?.run?.status === 'succeeded' || procData?.run?.status === 'ready') {
+            setStep('done')
+            setProgressMsg('Chunking và tạo Vector Embedding hoàn tất!')
+            setIsUploading(false)
+            onSuccess?.(res.paper)
+            return
+          }
+          if (procData?.run?.status === 'failed') {
+            setError('Quá trình chunking gặp lỗi.')
+            setIsUploading(false)
+            return
+          }
+        } catch {
+          // Ignore polling error
+        }
+        attempts++
+        if (attempts < 15) {
+          setTimeout(poll, 1500)
+        } else {
+          setStep('done')
+          setProgressMsg('Tài liệu đã được tải lên và đang tiếp tục xử lý ở chế độ nền!')
+          setIsUploading(false)
+          onSuccess?.(res.paper)
+        }
+      }
+      setTimeout(poll, 1200)
+    } catch (err: any) {
+      setError(err.message || 'Không thể tải lên tài liệu')
+      setIsUploading(false)
+      setStep('form')
+    }
+  }
+
+  const resetAndClose = () => {
+    setFile(null)
+    setTitle('')
+    setError('')
+    setStep('form')
+    setIsUploading(false)
+    onClose()
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={resetAndClose}>
+      <div className="upload-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <span className="eyebrow">UPLOAD TÀI LIỆU RAG</span>
+            <h2>{step === 'done' ? 'Tải Lên Thành Công!' : 'Tải Tài Liệu Lên Hệ Thống'}</h2>
+            <p>
+              {step === 'done'
+                ? 'Tài liệu đã được phân tích Layout, trích xuất text, chia nhỏ thành các Chunks và lập chỉ mục Vector.'
+                : 'Tải tài liệu PDF để hệ thống phân tích Docling, chia nhỏ Chunking và tạo Vector Embeddings phục vụ hỏi đáp.'}
+            </p>
+          </div>
+          <IconButton label="Đóng" onClick={resetAndClose}>
+            <X size={18} />
+          </IconButton>
+        </div>
+
+        {step === 'form' && (
+          <form onSubmit={startUpload}>
+            <div
+              className={`dropzone ${file ? 'has-file' : ''}`}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              onClick={() => document.getElementById('modal-pdf-file')?.click()}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className={`drop-icon ${file ? 'success' : ''}`}>
+                {file ? <CheckCircle2 size={24} /> : <Upload size={24} />}
+              </div>
+              {file ? (
+                <div>
+                  <strong>{file.name}</strong>
+                  <small>{(file.size / 1024 / 1024).toFixed(2)} MB · Nhấp để đổi file khác</small>
+                </div>
+              ) : (
+                <div>
+                  <strong>Kéo thả tệp PDF vào đây, hoặc nhấp để chọn tệp</strong>
+                  <small>Hỗ trợ tệp định dạng .pdf</small>
+                </div>
+              )}
+              <input
+                id="modal-pdf-file"
+                type="file"
+                accept=".pdf,application/pdf"
+                className="sr-only"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+              <label className="url-field">
+                <span>Tiêu đề tài liệu</span>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Tên tài liệu nghiên cứu"
+                  required
+                />
+              </label>
+
+              <label className="url-field">
+                <span>Dự án / Collection</span>
+                <select
+                  style={{
+                    height: 35,
+                    padding: '0 10px',
+                    border: '1px solid var(--line)',
+                    borderRadius: 6,
+                    background: '#fff',
+                    color: 'var(--ink)',
+                  }}
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                >
+                  {projects.map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {error && <p className="form-error" style={{ marginTop: 12 }}>{error}</p>}
+
+            <div className="modal-footer">
+              <button type="button" className="text-button" onClick={resetAndClose}>
+                Hủy
+              </button>
+              <button type="submit" className="primary-button" disabled={!file || isUploading}>
+                <Upload size={15} />
+                <span>Bắt đầu Tải lên & Chunking</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {(step === 'uploading' || step === 'processing') && (
+          <div style={{ padding: '28px 0', textAlign: 'center', display: 'grid', gap: 16 }}>
+            <div style={{ display: 'grid', placeItems: 'center' }}>
+              <RefreshCw size={36} className="animate-spin" style={{ color: 'var(--mint)' }} />
+            </div>
+            <div>
+              <strong style={{ fontSize: 15, color: 'var(--ink)' }}>{progressMsg}</strong>
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                Chuỗi pipeline 5 bước (Render → Layout → OCR → Chunking → Embedding) đang chạy.
+              </p>
+            </div>
+            <div className="progress-track" style={{ height: 6, margin: '8px 20px' }}>
+              <span style={{ width: step === 'uploading' ? '35%' : '75%', transition: 'width 0.5s ease' }} />
+            </div>
+          </div>
+        )}
+
+        {step === 'done' && (
+          <div style={{ padding: '20px 0', display: 'grid', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, background: '#f0faf6', border: '1px solid #bcead8', borderRadius: 9 }}>
+              <CheckCircle2 size={24} style={{ color: 'var(--mint-dark)', flexShrink: 0 }} />
+              <div>
+                <strong style={{ display: 'block', color: 'var(--mint-dark)', fontSize: 13 }}>{uploadedPaper?.title || 'Tài liệu'}</strong>
+                <span style={{ fontSize: 11, color: '#38685c' }}>Đã sẵn sàng để tìm kiếm và trả lời câu hỏi!</span>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className="outline-button"
+                onClick={() => {
+                  resetAndClose()
+                  navigate('/processing')
+                }}
+              >
+                <FileChartColumn size={15} />
+                <span>Xem Tiến Trình Chunking</span>
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  resetAndClose()
+                  navigate(`/workspace?project=${slugify(selectedProject)}`)
+                }}
+              >
+                <MessageCircle size={15} />
+                <span>Bắt Đầu Hỏi Đáp Ngay</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function PdfPreview({ page }: { page: number }) { return <div className="pdf-preview"><div className="pdf-paper"><div className="pdf-running-head">NATURE NEUROSCIENCE <span>RESULTS</span></div><h4>3.2 Attention and consolidation</h4><div className="pdf-lines">{Array.from({ length: 10 }).map((_, i) => <i key={i} />)}</div><div className="pdf-highlight">Items encoded under high attentional focus showed significantly greater stabilization of neural representations during sleep compared to low-attention encoding conditions.</div><div className="pdf-lines short">{Array.from({ length: 6 }).map((_, i) => <i key={i} />)}</div><small>{page}</small></div></div> }
 function SourceInspector({ source, index, onSelect, onClose }: { source: SourceChunk; index: number; onSelect: (index: number) => void; onClose: () => void }) { return <aside className="source-inspector"><div className="inspector-header"><h2>Sources</h2><IconButton label="Close sources" onClick={onClose}><X size={17} /></IconButton></div><div className="source-pager"><span><ChevronLeft size={13} /> {index + 1} of {sourceChunks.length} <ChevronRight size={13} /></span><div><IconButton label="Previous source" onClick={() => onSelect(index ? index - 1 : 1)}><ChevronLeft size={15} /></IconButton><IconButton label="Next source" onClick={() => onSelect((index + 1) % 2)}><ChevronRight size={15} /></IconButton></div></div><div className="source-title-row"><span className="source-number">{index + 1}</span><div><h3>{source.title}</h3><p>{source.authors}, {source.journal}</p></div></div><div className="source-meta"><span><FileText size={14} /> Page {source.page}</span><span className="chunk-chip">Chunk 04</span><IconButton label="Open source"><ArrowUpRight size={15} /></IconButton></div><PdfPreview page={source.page} /><div className="pdf-controls"><IconButton label="Zoom out"><ZoomOut size={15} /></IconButton><span>100%</span><IconButton label="Zoom in"><ZoomIn size={15} /></IconButton><IconButton label="Fullscreen"><Grip size={15} /></IconButton></div><div className="inspector-section"><div className="section-heading"><h3>Selected passage</h3><IconButton label="Copy passage"><Copy size={14} /></IconButton></div><div className="passage-box">{source.passage}</div></div><div className="chunk-meta"><div><span>Chunk ID</span><code>{source.id}</code></div><div><span>Retrieval score</span><code>{source.score.toFixed(2)}</code></div></div><details className="why-source" open><summary>Why this source <ChevronDown size={15} /></summary><p>{source.reason}</p></details></aside> }
@@ -248,6 +625,8 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
   const [credits, setCredits] = useState<CloudflareCreditData | null>(null)
   const [probingCredits, setProbingCredits] = useState(false)
   const [showCreditModal, setShowCreditModal] = useState(false)
+  const projects = useProjects()
+  const [showUploadModal, setShowUploadModal] = useState(false)
 
   const fetchCredits = async (probe = false) => {
     try {
@@ -379,6 +758,15 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
         onMenu={onMenu}
         action={
           <div className="topbar-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => setShowUploadModal(true)}
+              title="Tải lên tệp PDF để phân tích Layout, Chunking và hỏi đáp"
+            >
+              <Upload size={15} />
+              <span>Tải tài liệu (PDF)</span>
+            </button>
             <button
               type="button"
               className={`credit-pill-inline ${credits?.rateLimited ? 'warn' : 'ok'}`}
@@ -594,6 +982,12 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
           </div>
         </div>
       )}
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        projects={projects}
+        defaultProjectName={projectKey}
+      />
     </div>
   )
 }
@@ -721,7 +1115,7 @@ function DocumentsPage({ onMenu }: { onMenu: () => void }) {
   }
 
   return <div className="page-content documents-page">
-    <Topbar title="Document management" subtitle="Create projects and keep the papers inside each research thread organized." onMenu={onMenu} action={<button className="primary-button" onClick={() => { setPaperFormOpen(true); setNotice(''); setError('') }}><Plus size={16} /> Add paper</button>} />
+    <Topbar title="Quản lý tài liệu" subtitle="Tạo dự án và tổ chức các tài liệu nghiên cứu của bạn." onMenu={onMenu} action={<div className="topbar-actions"><button className="primary-button" onClick={() => { setPaperFormOpen(true); setNotice(''); setError('') }}><Upload size={16} /> Tải tài liệu (PDF)</button><Link to="/processing" className="outline-button"><FileChartColumn size={15} /> Xem tiến trình Chunking</Link></div>} />
     <div className="documents-layout">
       <section className="project-manager-panel" aria-labelledby="project-manager-title">
         <div className="manager-section-heading"><div><span className="eyebrow">WORKSPACE</span><h2 id="project-manager-title">Projects</h2></div><button className="text-button" onClick={() => { setProjectFormOpen(!projectFormOpen); setNotice('') }}><FolderPlus size={15} /> New project</button></div>
@@ -745,7 +1139,240 @@ function DocumentsPage({ onMenu }: { onMenu: () => void }) {
     </div>
   </div>
 }
-function Processing({ onMenu }: { onMenu: () => void }) { return <div className="page-content"><Topbar title="Processing" subtitle="Monitor ingestion quality from PDF to searchable embeddings." onMenu={onMenu} action={<button className="outline-button"><Activity size={16} /> Refresh status</button>} /><div className="processing-overview"><div><span className="eyebrow">PIPELINE HEALTH</span><h2>Everything is moving smoothly.</h2><p>One paper is currently being prepared for retrieval.</p></div><div className="health-ring"><strong>3/4</strong><span>ready</span></div></div><div className="jobs-list">{papers.map((p, i) => <div className="job-card" key={p.id}><div className="job-title"><span className="paper-icon" style={{ background: p.color }}><FileText size={17} /></span><div><strong>{p.title}</strong><span>{p.authors} · Updated {i ? 'Yesterday' : '2 min ago'}</span></div><StatusDot status={p.status} /><IconButton label="More actions"><MoreHorizontal size={17} /></IconButton></div><div className="job-progress"><div className="progress-track"><span style={{ width: `${p.status === 'Ready' ? 100 : p.status === 'Processing' ? 66 : 42}%` }} /></div><span>{p.status === 'Ready' ? '100%' : p.status === 'Processing' ? '66%' : '42%'}</span></div><div className="job-steps">{processingSteps.map((step, j) => <span className={j < (p.status === 'Ready' ? 4 : p.status === 'Processing' ? 3 : 2) ? 'done' : ''} key={step.label}>{j < 3 ? <CheckCircle2 size={14} /> : <span className="step-number">{j + 1}</span>}{step.label}</span>)}</div></div>)}</div></div> }
+
+function Processing({ onMenu }: { onMenu: () => void }) {
+  const [runs, setRuns] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState('')
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const projects = useProjects()
+
+  const fetchRuns = async (isManual = false) => {
+    if (isManual) setRefreshing(true)
+    try {
+      const data = await api('/api/v1/processing')
+      if (Array.isArray(data)) {
+        setRuns(data)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Không thể tải danh sách tiến trình')
+    } finally {
+      setLoading(false)
+      if (isManual) setRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    void fetchRuns()
+    const interval = setInterval(() => {
+      void fetchRuns()
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const totalRuns = runs.length
+  const readyRuns = runs.filter((r) => r.status === 'succeeded' || r.paper?.status === 'ready').length
+  const totalChunks = runs.reduce((sum, r) => sum + (r.paper?.metadata?.chunks?.length || 0), 0)
+
+  const stepLabels = [
+    { key: 'page_render', label: 'Page Render', desc: 'Trích xuất và kết xuất trang PDF' },
+    { key: 'layout', label: 'Layout Analysis', desc: 'Phân tích tiêu đề, bảng biểu, cột báo' },
+    { key: 'ocr', label: 'OCR Extraction', desc: 'Nhận diện văn bản quang học' },
+    { key: 'chunk', label: 'Chunking', desc: 'Cắt chia nhỏ văn bản theo cấu trúc ngữ nghĩa' },
+    { key: 'embedding', label: 'Vector Index', desc: 'Tạo embedding BAAI/BGE & lưu vào Vector Store' },
+  ]
+
+  return (
+    <div className="page-content">
+      <Topbar
+        title="Tiến trình Xử lý & Chunking"
+        subtitle="Theo dõi chi tiết quy trình ingestion từ PDF, phân tích layout, chia đoạn chunking đến vector database."
+        onMenu={onMenu}
+        action={
+          <div className="topbar-actions">
+            <button
+              className="outline-button"
+              onClick={() => void fetchRuns(true)}
+              disabled={refreshing}
+              title="Cập nhật lại trạng thái"
+            >
+              <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+              <span>Làm mới</span>
+            </button>
+            <button
+              className="primary-button"
+              onClick={() => setShowUploadModal(true)}
+              title="Tải lên tệp PDF mới"
+            >
+              <Upload size={15} />
+              <span>Tải tài liệu mới</span>
+            </button>
+          </div>
+        }
+      />
+
+      <div className="processing-overview">
+        <div>
+          <span className="eyebrow">HỆ THỐNG RAG PIPELINE & CHUNKING</span>
+          <h2>Quy trình bóc tách & lập chỉ mục hoạt động ổn định</h2>
+          <p>
+            Tự động chia tách văn bản thông minh (Semantic Chunking) và tạo Vector Embeddings cho {readyRuns}/{totalRuns} tài liệu ({totalChunks} chunks đã sẵn sàng).
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 14 }}>
+          <div className="health-ring">
+            <strong>{readyRuns}/{Math.max(totalRuns, 1)}</strong>
+            <span>ready</span>
+          </div>
+        </div>
+      </div>
+
+      {error && <p className="form-error" style={{ margin: '0 31px 16px' }}>{error}</p>}
+
+      <div className="jobs-list">
+        {loading && <p style={{ padding: '20px 0', textAlign: 'center', color: 'var(--muted)' }}>Đang tải danh sách tiến trình...</p>}
+
+        {!loading && runs.length === 0 && (
+          <div className="empty-state">
+            <FileChartColumn size={36} />
+            <strong>Chưa có tài liệu nào trong tiến trình</strong>
+            <span>Hãy tải lên tài liệu PDF đầu tiên để bắt đầu quá trình phân tích và chunking.</span>
+            <button className="primary-button" onClick={() => setShowUploadModal(true)}>
+              <Upload size={15} /> Tải tài liệu ngay
+            </button>
+          </div>
+        )}
+
+        {!loading && runs.map((run, i) => {
+          const paper = run.paper || {}
+          const chunks = paper.metadata?.chunks || []
+          const isReady = run.status === 'succeeded' || paper.status === 'ready'
+          const isRunning = run.status === 'running'
+          const isExpanded = expandedRunId === run.id
+
+          return (
+            <div className="job-card" key={run.id || i}>
+              <div className="job-title">
+                <span className="paper-icon" style={{ background: paper.color || '#d9f5e9' }}>
+                  <FileText size={17} />
+                </span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <strong>{paper.title || 'Tài liệu không tên'}</strong>
+                    <span className="collection-cell" style={{ fontSize: 10 }}>
+                      <Folder size={12} /> {paper.collection || 'Chung'}
+                    </span>
+                  </div>
+                  <span>
+                    {paper.authors ? (Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) : 'Tải lên trực tiếp'} · {chunks.length} chunks tạo lập · Cập nhật {run.updatedAt ? new Date(run.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong'}
+                  </span>
+                </div>
+                <StatusDot status={isReady ? 'Ready' : isRunning ? 'Processing' : run.status === 'failed' ? 'Failed' : 'Queued'} />
+                {chunks.length > 0 && (
+                  <button
+                    className="outline-button"
+                    style={{ height: 28, padding: '0 8px', fontSize: 10, marginLeft: 8 }}
+                    onClick={() => setExpandedRunId(isExpanded ? null : run.id)}
+                  >
+                    <Layers size={13} />
+                    <span>{isExpanded ? 'Đóng Chunks' : `Xem ${chunks.length} Chunks`}</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="job-progress">
+                <div className="progress-track">
+                  <span style={{ width: isReady ? '100%' : isRunning ? '65%' : '15%' }} />
+                </div>
+                <span>{isReady ? '100% · Hoàn tất' : isRunning ? '65% · Đang xử lý' : '15% · Đang chờ'}</span>
+              </div>
+
+              <div className="job-steps">
+                {stepLabels.map((step, idx) => {
+                  const job = run.jobs?.find((j: any) => j.jobType === step.key)
+                  const stepDone = isReady || job?.status === 'succeeded' || (isRunning && idx < 3)
+                  const stepActive = isRunning && !stepDone && (job?.status === 'running' || idx === 3)
+
+                  return (
+                    <span
+                      key={step.key}
+                      className={stepDone ? 'done' : ''}
+                      title={step.desc}
+                      style={{
+                        color: stepDone ? 'var(--mint-dark)' : stepActive ? 'var(--amber)' : 'var(--faint)',
+                        fontWeight: stepActive ? 600 : 500,
+                      }}
+                    >
+                      {stepDone ? (
+                        <CheckCircle2 size={14} />
+                      ) : stepActive ? (
+                        <RefreshCw size={13} className="animate-spin" />
+                      ) : (
+                        <span className="step-number">{idx + 1}</span>
+                      )}
+                      <span>{step.label}</span>
+                    </span>
+                  )
+                })}
+              </div>
+
+              {isExpanded && chunks.length > 0 && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 14,
+                    background: '#f8fbfb',
+                    border: '1px solid #d4ede5',
+                    borderRadius: 8,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <strong style={{ fontSize: 12, color: 'var(--ink)' }}>
+                      Danh sách các đoạn văn bản (Chunks) đã trích xuất & Vector hóa:
+                    </strong>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Tổng cộng: {chunks.length} chunks</span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+                    {chunks.map((chunk: any, cIdx: number) => (
+                      <div
+                        key={chunk.id || cIdx}
+                        style={{
+                          padding: 10,
+                          background: '#fff',
+                          border: '1px solid var(--line)',
+                          borderRadius: 6,
+                          fontSize: 11,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: 'var(--muted)', fontSize: 10 }}>
+                          <span style={{ fontFamily: 'DM Mono, monospace', color: 'var(--mint-dark)', fontWeight: 600 }}>
+                            Chunk #{cIdx + 1} ({chunk.id})
+                          </span>
+                          <span>Trang: {chunk.pageStart || 1} - {chunk.pageEnd || chunk.pageStart || 1}</span>
+                        </div>
+                        <p style={{ margin: 0, color: '#334155' }}>{chunk.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        projects={projects}
+        onSuccess={() => void fetchRuns()}
+      />
+    </div>
+  )
+}
 function PaperDetail({ onMenu }: { onMenu: () => void }) { const { paperId } = useParams(); const paper = papers.find(p => p.id === paperId) ?? papers[0]; const [page, setPage] = useState(7); return <div className="page-content paper-detail-page"><Topbar title={paper.title} subtitle={`${paper.authors} · ${paper.journal}, ${paper.year}`} onMenu={onMenu} action={<div className="topbar-actions"><StatusDot status={paper.status} /><button className="outline-button"><MoreHorizontal size={16} /> Actions</button></div>} /><div className="detail-tabs"><button className="active"><BookOpen size={15} /> PDF viewer</button><button><FileText size={15} /> Extracted text</button><button><Grip size={15} /> Chunks</button></div><div className="paper-detail-grid"><section className="document-viewer"><div className="viewer-toolbar"><span>Page {page} of {paper.pages}</span><div><IconButton label="Previous page" onClick={() => setPage(Math.max(1, page - 1))}><ChevronLeft size={16} /></IconButton><IconButton label="Next page" onClick={() => setPage(Math.min(paper.pages, page + 1))}><ChevronRight size={16} /></IconButton><span className="toolbar-separator" /><IconButton label="Zoom out"><ZoomOut size={16} /></IconButton><span>100%</span><IconButton label="Zoom in"><ZoomIn size={16} /></IconButton></div></div><PdfPreview page={page} /></section><section className="extracted-panel"><div className="panel-heading"><div><span className="eyebrow">SELECTED CONTENT</span><h2>Extracted text</h2></div><IconButton label="Open in workspace"><ArrowUpRight size={16} /></IconButton></div><div className="extracted-card"><div className="extracted-card-head"><span>Chunk 04</span><span className="score-label">0.87 retrieval score</span></div><p>{sourceChunks[0].passage}</p><button className="text-button"><Copy size={14} /> Copy chunk</button></div><div className="content-metadata"><div><span>Page range</span><code>07–08</code></div><div><span>Extraction confidence</span><code>98.4%</code></div><div><span>Characters</span><code>1,284</code></div></div><button className="issue-button"><CircleHelp size={15} /> Flag extraction issue</button></section></div><Pipeline /></div> }
 function Collections() { return <div className="page-content"><Topbar title="Collections" subtitle="Organize papers by project, question, or research thread." action={<button className="primary-button"><Plus size={16} /> New collection</button>} /><div className="collection-grid">{collections.map(c => <Link to="/workspace" className="collection-card" key={c.name}><div className="collection-card-top"><span className="collection-mark" style={{ background: `${c.accent}18`, color: c.accent }}><FolderOpen size={20} /></span><IconButton label="Collection actions"><MoreHorizontal size={17} /></IconButton></div><h2>{c.name}</h2><p>{c.description}</p><div><strong>{c.count}</strong><span>{c.count === 1 ? 'paper' : 'papers'}</span><ArrowUpRight size={15} /></div></Link>)}</div><div className="collection-tip"><Sparkles size={18} /><div><strong>Ask a collection to get a more focused answer.</strong><p>When selected, citations are limited to papers inside it.</p></div><Link to="/workspace" className="text-button">Try it <ArrowRight size={14} /></Link></div></div> }
 function HistoryPage({ onMenu }: { onMenu: () => void }) {
