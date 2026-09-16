@@ -13,6 +13,12 @@ const errorMessage = (payload, response) => payload?.error?.message || payload?.
 
 const providerFromConfig = (id, config) => {
   const definitions = {
+    cloudflare: {
+      baseUrl: config.cloudflareBaseUrl || (config.cloudflareAccountId ? `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/ai/v1` : ''),
+      apiKey: config.cloudflareApiToken || (config.llmProvider === 'cloudflare' ? config.llmApiKey : ''),
+      model: config.cloudflareLlmModel || config.llmModel || '@cf/qwen/qwen2.5-coder-32b-instruct',
+      free: true,
+    },
     groq: {
       baseUrl: config.groqBaseUrl,
       apiKey: config.groqApiKey || (config.llmProvider === 'groq' ? config.llmApiKey : ''),
@@ -142,8 +148,82 @@ export const createLlmRouter = (config, logger = console) => {
     throw error
   }
 
+  const probeProvider = async (providerId) => {
+    const provider = providers.find((p) => p.id === providerId)
+    if (!provider) return null
+    const state = states.get(providerId)
+    try {
+      const headers = { 'content-type': 'application/json', ...provider.headers }
+      if (provider.apiKey) headers.authorization = `Bearer ${provider.apiKey}`
+      const response = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: provider.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        state.failures += 1
+        state.lastError = errorMessage(payload, response)
+        if (response.status === 429) {
+          state.openedUntil = Date.now() + (config.llmCircuitBreakerCooldownMs || 60_000)
+        }
+        return { ok: false, status: response.status, error: state.lastError }
+      }
+      state.failures = 0
+      state.openedUntil = 0
+      state.lastError = null
+      state.lastSuccessAt = new Date().toISOString()
+      return { ok: true, status: 200 }
+    } catch (error) {
+      state.failures += 1
+      state.lastError = error.message
+      return { ok: false, status: 500, error: error.message }
+    }
+  }
+
+  const getCredits = async (probe = false) => {
+    const cf = providers.find((p) => p.id === 'cloudflare')
+    const groq = providers.find((p) => p.id === 'groq')
+    const state = states.get('cloudflare') || { failures: 0, openedUntil: 0, lastError: null, lastSuccessAt: null }
+    if (probe && cf) {
+      await probeProvider('cloudflare')
+    }
+    const isExhausted = Boolean(
+      state.openedUntil > Date.now() ||
+      state.failures > 0 ||
+      (state.lastError && (state.lastError.includes('429') || state.lastError.toLowerCase().includes('neuron')))
+    )
+    return {
+      provider: 'cloudflare',
+      configured: Boolean(cf),
+      dailyLimitNeurons: 10000,
+      unit: 'neurons',
+      status: !cf ? 'unconfigured' : isExhausted ? 'exhausted' : 'available',
+      state: state.openedUntil > Date.now() ? 'open' : state.failures ? 'degraded' : state.lastSuccessAt ? 'healthy' : 'idle',
+      rateLimited: isExhausted,
+      lastError: state.lastError,
+      message: isExhausted
+        ? 'Đã sử dụng hết hạn mức 10,000 Neurons miễn phí của Cloudflare Workers AI hôm nay. Hệ thống tự động chuyển sang Groq Compound (Llama 3.3 70B) tốc độ cao.'
+        : 'Hạn mức 10,000 Neurons/ngày của Cloudflare Workers AI đang khả dụng.',
+      models: {
+        llm: cf?.model || '@cf/qwen/qwen2.5-coder-32b-instruct',
+        embedding: config.cloudflareEmbeddingModel || '@cf/baai/bge-large-en-v1.5',
+      },
+      fallback: {
+        active: isExhausted,
+        provider: groq ? groq.id : 'groq',
+        model: groq ? groq.model : 'groq/compound',
+        status: 'healthy',
+      },
+      resetSchedule: '00:00 UTC (07:00 AM VN)',
+      lastChecked: new Date().toISOString(),
+    }
+  }
+
   return {
     complete,
+    probeProvider,
+    getCredits,
     health: () => ({
       enabled: config.llmEnabled,
       configured: providers.length > 0,

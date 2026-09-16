@@ -33,12 +33,16 @@ export const config = {
   signedUrlTtlSeconds: asInt(process.env.S3_SIGNED_URL_TTL_SECONDS, 900),
   llmEnabled: process.env.LLM_ENABLED !== 'false',
   llmProvider: process.env.LLM_PROVIDER || 'auto',
-  llmProviderOrder: process.env.LLM_PROVIDER_ORDER || 'groq,openrouter,huggingface,ollama,custom',
+  llmProviderOrder: process.env.LLM_PROVIDER_ORDER || 'cloudflare,groq,openrouter,huggingface,ollama,custom',
   llmTimeoutMs: asInt(process.env.LLM_TIMEOUT_MS, 30_000),
   llmMaxRetries: asInt(process.env.LLM_MAX_RETRIES, 1),
   llmCircuitBreakerThreshold: asInt(process.env.LLM_CIRCUIT_BREAKER_THRESHOLD, 2),
   llmCircuitBreakerCooldownMs: asInt(process.env.LLM_CIRCUIT_BREAKER_COOLDOWN_MS, 30_000),
   llmMaxTokens: asInt(process.env.LLM_MAX_TOKENS, 700),
+  cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID || '',
+  cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN || '',
+  cloudflareLlmModel: process.env.CLOUDFLARE_LLM_MODEL || '@cf/qwen/qwen2.5-coder-32b-instruct',
+  cloudflareBaseUrl: process.env.CLOUDFLARE_BASE_URL || '',
   groqBaseUrl: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
   groqApiKey: process.env.GROQ_API_KEY || '',
   groqModel: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
@@ -75,6 +79,8 @@ export const config = {
   qdrantApiKey: process.env.QDRANT_API_KEY || '',
   qdrantCollection: process.env.QDRANT_COLLECTION_NAME || 'schoolsummar_chunks',
   qdrantDistance: process.env.QDRANT_DISTANCE || 'Cosine',
+  agentMemoryUrl: process.env.AGENT_MEMORY_URL || 'http://127.0.0.1:8420',
+  agentMemoryEnabled: process.env.AGENT_MEMORY_ENABLED !== 'false',
 }
 
 export const isProduction = config.nodeEnv === 'production'
