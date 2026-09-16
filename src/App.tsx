@@ -12,9 +12,6 @@ export const getApiBaseUrl = () => {
   if (stored) return stored.replace(/\/$/, '')
   const envUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
   if (envUrl) return envUrl
-  if (window.location.hostname.includes('vercel.app')) {
-    return 'https://previous-pump-brother-saver.trycloudflare.com'
-  }
   return ''
 }
 
