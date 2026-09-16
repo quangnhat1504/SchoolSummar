@@ -6,8 +6,29 @@ import { Conversation, ConversationContent } from './components/ai-elements/conv
 import { collections, papers, processingSteps, sourceChunks, type Paper, type PaperStatus, type SourceChunk } from './data'
 import { LandingPage } from './LandingPage'
 
+export const getApiBaseUrl = () => {
+  if (typeof window === 'undefined') return ''
+  const stored = window.localStorage.getItem('research-rag-api-url')
+  if (stored) return stored.replace(/\/$/, '')
+  const envUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+  if (envUrl) return envUrl
+  if (window.location.hostname.includes('vercel.app')) {
+    return 'https://previous-pump-brother-saver.trycloudflare.com'
+  }
+  return ''
+}
+
 const api = async (path: string, init?: RequestInit) => {
-  const response = await fetch(path, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { 'content-type': 'application/json' }), ...(init?.headers || {}) } })
+  const baseUrl = getApiBaseUrl()
+  const targetUrl = path.startsWith('http') ? path : `${baseUrl}${path}`
+  const response = await fetch(targetUrl, {
+    ...init,
+    credentials: 'include',
+    headers: {
+      ...(init?.body instanceof FormData ? {} : { 'content-type': 'application/json' }),
+      ...(init?.headers || {}),
+    },
+  })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload.error?.message || 'Request failed')
   return payload.data
@@ -288,7 +309,18 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
         const history = await api(`/api/v1/sessions/${activeSession.id}/messages`)
         setMessages(history.map((message: any) => ({ id: message.id, role: message.role, content: message.content })))
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        socket = new WebSocket(`${protocol}://${window.location.host}/realtime`)
+        const baseUrl = getApiBaseUrl()
+        let wsUrl = `${protocol}://${window.location.host}/realtime`
+        if (baseUrl) {
+          try {
+            const parsed = new URL(baseUrl)
+            const wsProto = parsed.protocol === 'https:' ? 'wss' : 'ws'
+            wsUrl = `${wsProto}://${parsed.host}/realtime`
+          } catch {
+            wsUrl = `${protocol}://${window.location.host}/realtime`
+          }
+        }
+        socket = new WebSocket(wsUrl)
         socket.onmessage = (event) => {
           const message = JSON.parse(event.data)
           if (message.type === 'chat.started') setSending(true)

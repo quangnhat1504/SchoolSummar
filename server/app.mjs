@@ -21,13 +21,23 @@ import { createQdrantStore } from './qdrant.mjs'
 import { createAgentMemoryClient } from './agent_memory.mjs'
 
 const jsonHeaders = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
+const corsHeaders = (origin = '*') => ({
+  'access-control-allow-origin': origin || '*',
+  'access-control-allow-methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+  'access-control-allow-headers': 'content-type, authorization, x-request-id, x-user-id, apikey',
+  'access-control-allow-credentials': 'true',
+})
 const paperInput = z.object({ title: z.string().trim().min(1).max(500).optional(), authors: z.array(z.string().trim().min(1).max(200)).max(100).default([]), doi: z.string().trim().max(300).optional(), source: z.string().trim().max(100).optional(), sha256: z.string().regex(/^[0-9a-f]{64}$/i), metadata: z.record(z.any()).optional() })
 const messageInput = z.object({ content: z.string().trim().min(1).max(20_000), scope: z.object({ paperId: z.string().uuid().optional() }).optional() })
 const authRegisterInput = z.object({ email: z.string().trim().email().max(320), password: z.string().min(PASSWORD_MIN_LENGTH).max(200), displayName: z.string().trim().min(1).max(120).optional() })
 const authLoginInput = z.object({ email: z.string().trim().email().max(320), password: z.string().min(1).max(200) })
 const sessionInput = z.object({ title: z.string().trim().min(1).max(500).optional(), project: z.string().trim().min(1).max(120).optional() })
 
-const sendJson = (response, status, payload, headers = {}) => { response.writeHead(status, { ...jsonHeaders, ...headers }); response.end(JSON.stringify(payload)) }
+const sendJson = (response, status, payload, headers = {}) => {
+  const origin = response.reqOrigin || '*'
+  response.writeHead(status, { ...jsonHeaders, ...corsHeaders(origin), ...headers })
+  response.end(JSON.stringify(payload))
+}
 const parseLimit = (value, fallback = 50) => Math.min(Math.max(Number.parseInt(value || fallback, 10) || fallback, 1), 100)
 const pathParts = (pathname) => pathname.split('/').filter(Boolean)
 const readJson = async (request, maxBytes) => { let size = 0; const chunks = []; for await (const chunk of request) { size += chunk.length; if (size > maxBytes) throw new ApiError(413, 'payload_too_large', 'JSON body exceeds the configured limit'); chunks.push(chunk) } if (!chunks.length) return {}; try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw badRequest('Request body must be valid JSON') } }
@@ -82,7 +92,16 @@ export const createApp = (overrides = {}) => {
   const server = createServer(async (request, response) => {
     const requestId = request.headers['x-request-id'] || randomUUID()
     const requestUrl = new URL(request.url || '/', config.appUrl)
-      response.setHeader('x-request-id', requestId)
+    const origin = request.headers.origin || '*'
+    response.reqOrigin = origin
+    response.setHeader('x-request-id', requestId)
+    for (const [k, v] of Object.entries(corsHeaders(origin))) {
+      response.setHeader(k, v)
+    }
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204, corsHeaders(origin))
+      return response.end()
+    }
     try {
       if (requestUrl.pathname.startsWith('/api/')) {
         if (request.method === 'GET' && requestUrl.pathname === '/api/health') return sendJson(response, 200, { ok: true, service: config.appName, version: '1.0.0', mode: store.kind, realtime: true, llm: llm.health(), memory: await memoryClient.health() })
