@@ -148,6 +148,118 @@ CREATE TABLE layout_blocks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL,
   paper_id uuid NOT NULL,
+  page_id uuid NOT NULL,
+  block_type text NOT NULL,
+  bbox_x1 real NOT NULL DEFAULT 0,
+  bbox_y1 real NOT NULL DEFAULT 0,
+  bbox_x2 real NOT NULL DEFAULT 0,
+  bbox_y2 real NOT NULL DEFAULT 0,
+  normalized_bbox jsonb NOT NULL DEFAULT '{}'::jsonb,
+  reading_order integer NOT NULL DEFAULT 0,
+  confidence real,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (owner_id, id),
+  UNIQUE (owner_id, id, paper_id),
+  FOREIGN KEY (owner_id, page_id, paper_id)
+    REFERENCES paper_pages(owner_id, id, paper_id) ON DELETE CASCADE
+);
+
+CREATE TABLE ocr_results (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL,
+  paper_id uuid NOT NULL,
+  layout_block_id uuid NOT NULL,
+  ocr_engine text NOT NULL DEFAULT 'docling',
+  text text NOT NULL DEFAULT '',
+  language text,
+  confidence real,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (owner_id, id),
+  UNIQUE (owner_id, layout_block_id, ocr_engine),
+  FOREIGN KEY (owner_id, layout_block_id, paper_id)
+    REFERENCES layout_blocks(owner_id, id, paper_id) ON DELETE CASCADE
+);
+
+CREATE TABLE paper_assets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL,
+  paper_id uuid NOT NULL,
+  page_id uuid,
+  asset_type text NOT NULL,
+  object_key text NOT NULL UNIQUE,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (owner_id, id),
+  UNIQUE (owner_id, id, paper_id),
+  FOREIGN KEY (owner_id, paper_id)
+    REFERENCES papers(owner_id, id) ON DELETE CASCADE
+);
+
+CREATE TABLE document_chunks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL,
+  paper_id uuid NOT NULL,
+  processing_run_id uuid NOT NULL,
+  chunk_index integer NOT NULL CHECK (chunk_index >= 0),
+  text text NOT NULL,
+  token_count integer NOT NULL CHECK (token_count > 0),
+  page_start integer NOT NULL CHECK (page_start > 0),
+  page_end integer NOT NULL CHECK (page_end >= page_start),
+  content_hash text NOT NULL,
+  search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', text)) STORED,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (owner_id, id),
+  UNIQUE (owner_id, id, paper_id),
+  UNIQUE (owner_id, processing_run_id, chunk_index),
+  FOREIGN KEY (owner_id, processing_run_id, paper_id)
+    REFERENCES processing_runs(owner_id, id, paper_id) ON DELETE CASCADE
+);
+
+CREATE TABLE chunk_blocks (
+  owner_id uuid NOT NULL,
+  paper_id uuid NOT NULL,
+  chunk_id uuid NOT NULL,
+  layout_block_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, chunk_id, layout_block_id),
+  FOREIGN KEY (owner_id, chunk_id, paper_id)
+    REFERENCES document_chunks(owner_id, id, paper_id) ON DELETE CASCADE,
+  FOREIGN KEY (owner_id, layout_block_id, paper_id)
+    REFERENCES layout_blocks(owner_id, id, paper_id) ON DELETE CASCADE
+);
+
+CREATE TABLE embedding_models (
+  id text PRIMARY KEY,
+  provider text NOT NULL,
+  dimension integer NOT NULL CHECK (dimension = 1536),
+  description text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO embedding_models (id, provider, dimension, description)
+VALUES ('text-embedding-3-small', 'openai', 1536, 'Default OpenAI embedding model')
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE chunk_embeddings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL,
+  paper_id uuid NOT NULL,
+  processing_run_id uuid NOT NULL,
+  chunk_id uuid NOT NULL,
+  embedding_model_id text NOT NULL REFERENCES embedding_models(id) ON DELETE RESTRICT,
+  embedding vector(1536) NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (owner_id, id),
+  UNIQUE (owner_id, embedding_model_id, chunk_id),
+  FOREIGN KEY (owner_id, chunk_id, paper_id)
+    REFERENCES document_chunks(owner_id, id, paper_id) ON DELETE CASCADE,
+  FOREIGN KEY (owner_id, processing_run_id, paper_id)
+    REFERENCES processing_runs(owner_id, id, paper_id) ON DELETE CASCADE
+);
+
 CREATE TABLE chat_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -251,7 +251,7 @@ export class PostgresStore {
 
   async createPaper(ownerId, input) {
     return this.withTx(ownerId, async (client) => {
-      await client.query('INSERT INTO users (id, auth_subject, display_name) VALUES ($1, $1, $2) ON CONFLICT (id) DO NOTHING', [ownerId, 'Researcher'])
+      await client.query('INSERT INTO users (id, auth_subject, display_name) VALUES ($1::uuid, $2::text, $3) ON CONFLICT (id) DO NOTHING', [ownerId, String(ownerId), 'Researcher'])
       const { rows } = await client.query('INSERT INTO papers (owner_id, title, authors, doi, source, sha256, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,title,authors,doi,source,status,metadata,created_at,updated_at', [ownerId, input.title || null, JSON.stringify(input.authors || []), input.doi || null, input.source || null, input.sha256, input.metadata || {}])
       return normalizePaper({ ...rows[0], createdAt: rows[0].created_at.toISOString(), updatedAt: rows[0].updated_at.toISOString() })
     })
