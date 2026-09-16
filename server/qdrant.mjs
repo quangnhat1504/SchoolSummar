@@ -91,7 +91,9 @@ export class QdrantVectorStore {
     return { count: points.length }
   }
 
-  async search(queryVector, { ownerId, paperId, limit = 8, collection = this.collection } = {}) {
+  async search(queryVector, options = {}) {
+    const opts = typeof options === 'number' ? { limit: options } : (options || {})
+    const { ownerId, paperId, limit = 8, collection = this.collection } = opts
     const filterMust = []
     if (ownerId) {
       filterMust.push({ key: 'ownerId', match: { value: ownerId } })
@@ -114,13 +116,13 @@ export class QdrantVectorStore {
     const matches = res.result || []
 
     return matches.map((match) => ({
-      paperId: match.payload?.paperId,
+      paperId: match.payload?.paperId || match.payload?.document_id,
       processingRunId: match.payload?.processingRunId,
       chunkId: match.id,
       title: match.payload?.title || 'Untitled',
-      text: match.payload?.text || '',
-      pageStart: match.payload?.pageStart || 1,
-      pageEnd: match.payload?.pageEnd || 1,
+      text: match.payload?.text || match.payload?.raw_text || match.payload?.sample_text || '',
+      pageStart: match.payload?.pageStart || match.payload?.page_start || 1,
+      pageEnd: match.payload?.pageEnd || match.payload?.page_end || 1,
       score: match.score
     }))
   }

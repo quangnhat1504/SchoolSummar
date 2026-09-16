@@ -18,6 +18,7 @@ import { createDoclingAdapter } from './docling.mjs'
 import { createLlmRouter } from './llm.mjs'
 import { createEmbeddingProvider } from './embeddings.mjs'
 import { createQdrantStore } from './qdrant.mjs'
+import { createAgentMemoryClient } from './agent_memory.mjs'
 
 const jsonHeaders = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
 const paperInput = z.object({ title: z.string().trim().min(1).max(500).optional(), authors: z.array(z.string().trim().min(1).max(200)).max(100).default([]), doi: z.string().trim().max(300).optional(), source: z.string().trim().max(100).optional(), sha256: z.string().regex(/^[0-9a-f]{64}$/i), metadata: z.record(z.any()).optional() })
@@ -50,15 +51,16 @@ const issueSession = async (store, config, user) => {
   return token
 }
 
-const queueChat = async ({ store, hub, identity, sessionId, userMessage, question, scope, config, llm, logger, vectorStore, embedder }) => {
+const queueChat = async ({ store, hub, identity, sessionId, userMessage, question, scope, config, llm, logger, vectorStore, embedder, memoryClient }) => {
   hub.publish(identity.userId, 'chat.message.created', { sessionId, message: userMessage })
   try {
     hub.publish(identity.userId, 'chat.started', { sessionId, messageId: userMessage.id })
-    const answer = await answerQuestion(config, store, identity.userId, question, scope, llm, vectorStore, embedder)
-    const assistant = await store.addMessage(identity.userId, sessionId, { role: 'assistant', content: answer.text, model: answer.provider ? `${answer.provider}:${answer.model}` : answer.mode, metadata: { retrievalMode: answer.mode, sourceCount: answer.sources.length, provider: answer.provider, model: answer.model } })
+    const answer = await answerQuestion(config, store, identity.userId, question, scope, llm, vectorStore, embedder, memoryClient, sessionId)
+    const assistant = await store.addMessage(identity.userId, sessionId, { role: 'assistant', content: answer.text, model: answer.provider ? `${answer.provider}:${answer.model}` : answer.mode, metadata: { retrievalMode: answer.mode, sourceCount: answer.sources.length, provider: answer.provider, model: answer.model, memoryRecalled: answer.recalledMemory } })
     if (answer.sources.length) await store.addCitations(identity.userId, assistant.id, answer.sources)
     await streamAnswer(answer, async (delta) => hub.publish(identity.userId, 'chat.delta', { sessionId, messageId: assistant.id, delta }))
     hub.publish(identity.userId, 'chat.completed', { sessionId, message: { ...assistant, citations: answer.sources } })
+    void memoryClient?.capture({ userContent: question, assistantContent: answer.text, sessionKey: sessionId || identity.userId, userId: identity.userId }).catch(() => {})
   } catch (error) {
     logger.error({ error, sessionId }, 'chat generation failed')
     hub.publish(identity.userId, 'chat.failed', { sessionId, messageId: userMessage.id, message: 'Unable to generate an answer. Please retry.' })
@@ -74,6 +76,7 @@ export const createApp = (overrides = {}) => {
   const llm = overrides.llm || createLlmRouter(config, logger)
   const embedder = overrides.embedder || createEmbeddingProvider(config)
   const vectorStore = overrides.vectorStore || (config.qdrantUrl ? createQdrantStore(config) : null)
+  const memoryClient = overrides.memoryClient || createAgentMemoryClient(config, logger)
   const hub = overrides.hub || new RealtimeHub({ authenticate: (request, url) => resolveIdentity(request, config, store, url), logger })
 
   const server = createServer(async (request, response) => {
@@ -82,9 +85,14 @@ export const createApp = (overrides = {}) => {
       response.setHeader('x-request-id', requestId)
     try {
       if (requestUrl.pathname.startsWith('/api/')) {
-        if (request.method === 'GET' && requestUrl.pathname === '/api/health') return sendJson(response, 200, { ok: true, service: config.appName, version: '1.0.0', mode: store.kind, realtime: true, llm: llm.health() })
+        if (request.method === 'GET' && requestUrl.pathname === '/api/health') return sendJson(response, 200, { ok: true, service: config.appName, version: '1.0.0', mode: store.kind, realtime: true, llm: llm.health(), memory: await memoryClient.health() })
         if (request.method === 'GET' && requestUrl.pathname === '/api/ready') { const readiness = await store.health(); return sendJson(response, readiness.ok ? 200 : 503, { ...readiness, service: config.appName, llm: llm.health() }) }
         if (request.method === 'GET' && requestUrl.pathname === '/api/v1/llm/health') return sendJson(response, 200, { ok: true, data: llm.health() })
+        if (request.method === 'GET' && (requestUrl.pathname === '/api/v1/cloudflare/credits' || requestUrl.pathname === '/api/v1/llm/credits')) {
+          const probe = requestUrl.searchParams.get('probe') === 'true'
+          const data = await llm.getCredits?.(probe) || {}
+          return sendJson(response, 200, { ok: true, data })
+        }
         if (request.method === 'POST' && requestUrl.pathname === '/api/v1/auth/register') {
           const body = authRegisterInput.parse(await readJson(request, config.maxJsonBytes)); assertPassword(body.password)
           const user = await store.createAuthUser({ email: normalizeEmail(body.email), displayName: body.displayName, passwordHash: hashPassword(body.password) })
@@ -145,7 +153,7 @@ export const createApp = (overrides = {}) => {
         if (method === 'GET' && requestUrl.pathname === '/api/v1/sessions') return sendJson(response, 200, { ok: true, data: await store.listSessions(identity.userId, { project: requestUrl.searchParams.get('project') || '' }) })
         if (method === 'POST' && requestUrl.pathname === '/api/v1/sessions') { const body = sessionInput.parse(await readJson(request, config.maxJsonBytes)); const session = await store.createSession(identity.userId, body.title || null, body.project || null); return sendJson(response, 201, { ok: true, data: session }) }
         if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'GET') return sendJson(response, 200, { ok: true, data: await store.listMessages(identity.userId, parts[3]) })
-        if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'POST') { const body = messageInput.parse(await readJson(request, config.maxJsonBytes)); const userMessage = await store.addMessage(identity.userId, parts[3], { role: 'user', content: body.content }); void queueChat({ store, hub, identity, sessionId: parts[3], userMessage, question: body.content, scope: body.scope, config, llm, logger, vectorStore, embedder }); return sendJson(response, 202, { ok: true, data: { message: userMessage, status: 'queued' } }) }
+        if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'sessions' && parts[3] && parts[4] === 'messages' && method === 'POST') { const body = messageInput.parse(await readJson(request, config.maxJsonBytes)); const userMessage = await store.addMessage(identity.userId, parts[3], { role: 'user', content: body.content }); void queueChat({ store, hub, identity, sessionId: parts[3], userMessage, question: body.content, scope: body.scope, config, llm, logger, vectorStore, embedder, memoryClient }); return sendJson(response, 202, { ok: true, data: { message: userMessage, status: 'queued' } }) }
         if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'files' && parts[3] && method === 'GET' && objectStore.kind === 'local') { const objectKey = decodeURIComponent(parts.slice(3).join('/')); const filePath = join(config.localStorageDir, objectKey); try { const metadata = await stat(filePath); response.writeHead(200, { 'content-type': 'application/pdf', 'content-length': metadata.size, 'cache-control': 'private, max-age=60' }); return objectStore.stream(objectKey).pipe(response) } catch { throw notFound('File not found') } }
         return sendJson(response, 404, errorPayload(notFound('API route not found'), requestId), { 'cache-control': 'no-store' })
       }
@@ -166,5 +174,5 @@ export const createApp = (overrides = {}) => {
   })
 
   hub.attach(server)
-  return { config, server, store, objectStore, hub, llm, logger, embedder, vectorStore }
+  return { config, server, store, objectStore, hub, llm, logger, embedder, vectorStore, memoryClient }
 }

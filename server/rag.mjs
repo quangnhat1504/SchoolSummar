@@ -22,20 +22,46 @@ QUY TẮC BẮT BUỘC (GROUNDED CITATION CONTRACT):
 5. NGÔN NGỮ ĐỒNG NHẤT (LANGUAGE MATCHING):
    - Trả lời bằng ngôn ngữ người dùng đặt câu hỏi (hỏi tiếng Việt trả lời tiếng Việt; hỏi tiếng Anh trả lời tiếng Anh).`
 
-const llmAnswer = async (llm, config, question, sources) => {
+const llmAnswer = async (llm, config, question, sources, memoryContext = '') => {
   if (!llm || !sources.length) return null
-  const context = sources.map((source, index) => `[${index + 1}] "${source.title || 'Untitled Paper'}" (Trang ${source.pageStart || 1}):\n${source.text}`).join('\n\n---\n\n')
+  const maxChunkChars = 1000
+  let totalChars = 0
+  const contextParts = []
+  for (let index = 0; index < sources.length; index += 1) {
+    const source = sources[index]
+    const raw = (source.text || '').trim()
+    const boundedText = raw.length > maxChunkChars ? `${raw.slice(0, maxChunkChars)}... [cắt bớt]` : raw
+    const part = `[${index + 1}] "${source.title || 'Untitled Paper'}" (Trang ${source.pageStart || 1}):\n${boundedText}`
+    if (totalChars + part.length > 8000) break
+    contextParts.push(part)
+    totalChars += part.length
+  }
+  const context = contextParts.join('\n\n---\n\n')
+  const userContent = memoryContext
+    ? `Ký ức ngữ cảnh & hồ sơ người dùng:\n${memoryContext}\n\nDưới đây là các đoạn trích dẫn từ tài liệu:\n\n${context}\n\nCâu hỏi: ${question}\n\nHãy trả lời câu hỏi trên dựa CHÍNH XÁC vào các đoạn trích dẫn trên (và hồ sơ người dùng nếu phù hợp), trích dẫn [n] đầy đủ:`
+    : `Dưới đây là các đoạn trích dẫn từ tài liệu:\n\n${context}\n\nCâu hỏi: ${question}\n\nHãy trả lời câu hỏi trên dựa CHÍNH XÁC vào các đoạn trích dẫn trên và trích dẫn [n] đầy đủ:`
+
   const result = await llm.complete({
     messages: [
       { role: 'system', content: RESEARCH_RAG_SYSTEM_PROMPT },
-      { role: 'user', content: `Dưới đây là các đoạn trích dẫn từ tài liệu:\n\n${context}\n\nCâu hỏi: ${question}\n\nHãy trả lời câu hỏi trên dựa CHÍNH XÁC vào các đoạn trích dẫn trên và trích dẫn [n] đầy đủ:` },
+      { role: 'user', content: userContent },
     ],
     maxTokens: config.llmMaxTokens,
   })
   return result?.text ? result : null
 }
 
-export const answerQuestion = async (config, store, ownerId, question, scope, llm, vectorStore = null, embedder = null) => {
+export const answerQuestion = async (config, store, ownerId, question, scope, llm, vectorStore = null, embedder = null, memoryClient = null, sessionKey = null) => {
+  let memoryContext = ''
+  if (memoryClient && typeof memoryClient.recall === 'function') {
+    try {
+      const recalled = await memoryClient.recall({ query: question, sessionKey: sessionKey || ownerId, userId: ownerId })
+      if (recalled?.context) memoryContext = recalled.context
+    } catch {
+      // Gracefully continue without memory
+    }
+  }
+
   let sources = []
   if (vectorStore && embedder && embedder.isConfigured) {
     try {
@@ -62,13 +88,14 @@ export const answerQuestion = async (config, store, ownerId, question, scope, ll
     sources = await store.searchChunks(ownerId, question, { paperId: scope?.paperId, limit: config.rerankTopK })
   }
   let answer
-  try { answer = await llmAnswer(llm, config, question, sources) } catch { answer = null }
+  try { answer = await llmAnswer(llm, config, question, sources, memoryContext) } catch { answer = null }
   return {
     text: answer?.text || demoAnswer(question, sources),
     sources,
     mode: answer ? 'llm' : 'fallback',
     provider: answer?.provider || null,
     model: answer?.model || null,
+    recalledMemory: Boolean(memoryContext),
   }
 }
 

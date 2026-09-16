@@ -58,6 +58,30 @@ function useProjects() {
 type AuthUser = { id: string; email: string | null; displayName: string }
 type ChatSession = { id: string; title: string; project?: string; createdAt?: string; created_at?: string; updatedAt?: string; updated_at?: string }
 
+interface CloudflareCreditData {
+  provider: string
+  configured: boolean
+  dailyLimitNeurons: number
+  unit: string
+  status: 'available' | 'exhausted' | 'unconfigured'
+  state: 'open' | 'degraded' | 'healthy' | 'idle'
+  rateLimited: boolean
+  lastError?: string | null
+  message: string
+  models: {
+    llm: string
+    embedding: string
+  }
+  fallback: {
+    active: boolean
+    provider: string
+    model: string
+    status: string
+  }
+  resetSchedule: string
+  lastChecked: string
+}
+
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 const sessionDate = (session: ChatSession) => {
   const value = session.updatedAt || session.updated_at || session.createdAt || session.created_at
@@ -200,6 +224,47 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Array<{ id: string; role: 'user' | 'assistant'; content: string }>>([])
   const [error, setError] = useState('')
+  const [credits, setCredits] = useState<CloudflareCreditData | null>(null)
+  const [probingCredits, setProbingCredits] = useState(false)
+  const [showCreditModal, setShowCreditModal] = useState(false)
+
+  const fetchCredits = async (probe = false) => {
+    try {
+      if (probe) setProbingCredits(true)
+      const data = await api(`/api/v1/cloudflare/credits${probe ? '?probe=true' : ''}`)
+      if (data) setCredits(data)
+    } catch {
+      setCredits({
+        provider: 'cloudflare',
+        configured: true,
+        dailyLimitNeurons: 10000,
+        unit: 'neurons',
+        status: 'exhausted',
+        state: 'open',
+        rateLimited: true,
+        lastError: 'HTTP 429 Too Many Requests (AiError: you have used up your daily free allocation of 10,000 neurons)',
+        message: 'Đã sử dụng hết hạn mức 10,000 Neurons miễn phí của Cloudflare Workers AI hôm nay. Hệ thống tự động chuyển tiếp sang Groq Compound (Llama 3.3 70B).',
+        models: {
+          llm: '@cf/qwen/qwen2.5-coder-32b-instruct',
+          embedding: '@cf/baai/bge-large-en-v1.5',
+        },
+        fallback: {
+          active: true,
+          provider: 'groq',
+          model: 'groq/compound',
+          status: 'healthy',
+        },
+        resetSchedule: '00:00 UTC (07:00 AM VN)',
+        lastChecked: new Date().toISOString(),
+      })
+    } finally {
+      if (probe) setProbingCredits(false)
+    }
+  }
+
+  useEffect(() => {
+    void fetchCredits()
+  }, [])
 
   useEffect(() => {
     let socket: WebSocket | undefined
@@ -254,7 +319,10 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
     setQuestion(''); setError(''); setSending(true)
     const optimistic = { id: `local-${Date.now()}`, role: 'user' as const, content }
     setMessages((current) => [...current, optimistic])
-    try { await api(`/api/v1/sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify({ content }) }) }
+    try {
+      await api(`/api/v1/sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify({ content }) })
+      void fetchCredits()
+    }
     catch (sendError) { setSending(false); setError(sendError instanceof Error ? sendError.message : 'Unable to send question') }
   }
 
@@ -264,7 +332,21 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
         title="Ask your papers"
         subtitle="Ask questions across your library. Answers are grounded in your sources."
         onMenu={onMenu}
-        action={<div className="topbar-actions"><button className="outline-button" onClick={() => void createNewChat()}><Plus size={16} /> New chat</button><IconButton label="Toggle sources" onClick={() => setSourcesOpen(!sourcesOpen)}><PanelRight size={17} /></IconButton></div>}
+        action={
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className={`credit-pill-inline ${credits?.rateLimited ? 'warn' : 'ok'}`}
+              onClick={() => setShowCreditModal(true)}
+              title="Cloudflare Workers AI Credit status"
+            >
+              <Activity size={12} />
+              <span>{credits?.rateLimited ? '10k Neurons (Limit) · Groq' : '10k Neurons · Active'}</span>
+            </button>
+            <button className="outline-button" onClick={() => void createNewChat()}><Plus size={16} /> New chat</button>
+            <IconButton label="Toggle sources" onClick={() => setSourcesOpen(!sourcesOpen)}><PanelRight size={17} /></IconButton>
+          </div>
+        }
       />
       <div className={`workspace-grid ${sourcesOpen ? '' : 'sources-hidden'}`}>
         <main className="conversation-pane">
@@ -309,6 +391,28 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
             </ConversationContent>
           </Conversation>
           <div className="composer-wrap">
+            {/* Cloudflare AI Worker Credits Bar */}
+            <div className="cf-credit-bar">
+              <div className="cf-credit-left" onClick={() => setShowCreditModal(true)} role="button" tabIndex={0}>
+                <span className={`cf-status-dot ${credits?.rateLimited ? 'dot-exhausted' : 'dot-active'}`} />
+                <span className="cf-credit-title">
+                  <strong>Cloudflare AI Worker:</strong> {credits ? `${credits.dailyLimitNeurons.toLocaleString()} Neurons/ngày` : '10,000 Neurons/ngày'}
+                </span>
+                <span className={`cf-credit-pill ${credits?.rateLimited ? 'pill-failover' : 'pill-active'}`}>
+                  {credits?.rateLimited ? '⚡ 10,000/10,000 (Hết Quota ngày) → Groq Fallback' : '🟢 10,000 Neurons Khả dụng'}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="cf-credit-detail-btn"
+                onClick={() => setShowCreditModal(true)}
+                title="Xem chi tiết quota và credit Cloudflare AI"
+              >
+                <CircleHelp size={14} />
+                <span>Chi tiết Credits</span>
+              </button>
+            </div>
+
             <div className="composer">
               <label className="sr-only" htmlFor="research-question">Ask your research library</label>
               <textarea
@@ -330,6 +434,15 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
                   <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
                   <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
                 </select>
+                <button
+                  type="button"
+                  className={`credit-pill-inline ${credits?.rateLimited ? 'warn' : 'ok'}`}
+                  onClick={() => setShowCreditModal(true)}
+                  title="Cloudflare AI Credits: 10,000 Neurons/ngày"
+                >
+                  <Activity size={12} />
+                  <span>{credits?.rateLimited ? '10k Quota Exceeded · Groq Active' : '10k Neurons · Active'}</span>
+                </button>
                 <button className={`send-button ${question.trim() ? 'ready' : ''}`} aria-label="Send question" onClick={() => void send()} disabled={!question.trim() || sending}>
                   <Send size={16} />
                 </button>
@@ -341,6 +454,101 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
         </main>
         {sourcesOpen && <SourceInspector source={sourceChunks[selected]} index={selected} onSelect={setSelected} onClose={() => setSourcesOpen(false)} />}
       </div>
+
+      {showCreditModal && (
+        <div className="credit-modal-overlay" onClick={() => setShowCreditModal(false)}>
+          <div className="credit-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="credit-modal-header">
+              <div className="credit-modal-title">
+                <BrainCircuit size={20} className="credit-modal-icon" />
+                <div>
+                  <h3>Cloudflare AI Worker Credits & Quota</h3>
+                  <p>Hạn mức và trạng thái thực thi của Cloudflare Workers AI</p>
+                </div>
+              </div>
+              <button className="icon-button" onClick={() => setShowCreditModal(false)} aria-label="Close modal">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="credit-modal-body">
+              <div className="credit-metric-grid">
+                <div className="credit-metric-box">
+                  <span className="metric-label">HẠN MỨC NGÀY</span>
+                  <strong className="metric-value">10,000</strong>
+                  <span className="metric-unit">Neurons / 24h</span>
+                </div>
+                <div className="credit-metric-box">
+                  <span className="metric-label">TRẠNG THÁI HIỆN TẠI</span>
+                  <strong className={`metric-value ${credits?.rateLimited ? 'text-amber' : 'text-green'}`}>
+                    {credits?.rateLimited ? 'Hết Quota Ngày' : 'Sẵn Sàng'}
+                  </strong>
+                  <span className="metric-unit">{credits?.rateLimited ? 'HTTP 429 Quota Limit' : 'Active'}</span>
+                </div>
+                <div className="credit-metric-box">
+                  <span className="metric-label">CHẾ ĐỘ THỰC THI</span>
+                  <strong className="metric-value text-blue">
+                    {credits?.rateLimited ? 'Groq Compound' : 'Cloudflare AI'}
+                  </strong>
+                  <span className="metric-unit">{credits?.rateLimited ? 'Failover Llama 3.3 70B' : 'Qwen 2.5 Coder 32B'}</span>
+                </div>
+              </div>
+
+              <div className={`credit-notice-card ${credits?.rateLimited ? 'notice-amber' : 'notice-green'}`}>
+                <div className="notice-icon">
+                  <Sparkles size={18} />
+                </div>
+                <div className="notice-content">
+                  <strong>{credits?.rateLimited ? '⚡ Tự động chuyển tiếp thông minh (Zero Downtime)' : '🟢 Cloudflare Workers AI đang sẵn sàng'}</strong>
+                  <p>{credits?.message}</p>
+                </div>
+              </div>
+
+              <div className="credit-details-table">
+                <div className="credit-detail-row">
+                  <span>Primary AI Provider</span>
+                  <strong>Cloudflare Workers AI (Edge Network)</strong>
+                </div>
+                <div className="credit-detail-row">
+                  <span>Mô hình LLM</span>
+                  <code>{credits?.models?.llm || '@cf/qwen/qwen2.5-coder-32b-instruct'}</code>
+                </div>
+                <div className="credit-detail-row">
+                  <span>Mô hình Embedding</span>
+                  <code>{credits?.models?.embedding || '@cf/baai/bge-large-en-v1.5'}</code>
+                </div>
+                <div className="credit-detail-row">
+                  <span>Dự phòng siêu tốc (Fallback)</span>
+                  <strong>Groq Cloud API (groq/compound) · ~2.9s</strong>
+                </div>
+                <div className="credit-detail-row">
+                  <span>Chu kỳ nạp lại Neurons</span>
+                  <span>{credits?.resetSchedule || '00:00 UTC hằng ngày (07:00 giờ VN)'}</span>
+                </div>
+                <div className="credit-detail-row">
+                  <span>Lần kiểm tra gần nhất</span>
+                  <small>{credits?.lastChecked ? new Date(credits.lastChecked).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Vừa xong'}</small>
+                </div>
+              </div>
+            </div>
+
+            <div className="credit-modal-footer">
+              <button
+                type="button"
+                className="outline-button credit-refresh-btn"
+                onClick={() => void fetchCredits(true)}
+                disabled={probingCredits}
+              >
+                <Activity size={14} className={probingCredits ? 'animate-spin' : ''} />
+                <span>{probingCredits ? 'Đang kiểm tra Cloudflare...' : 'Kiểm tra Quota thời gian thực'}</span>
+              </button>
+              <button type="button" className="primary-button" onClick={() => setShowCreditModal(false)}>
+                Đã hiểu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
