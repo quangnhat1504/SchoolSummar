@@ -765,17 +765,38 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
     try {
       const res = await api(`/api/v1/sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify({ content }) })
       if (res?.assistant?.content) {
-        setMessages((current) => {
-          const filtered = current.filter((m) => m.id !== res.assistant.id)
-          return [...filtered, { id: res.assistant.id, role: 'assistant', content: res.assistant.content, citations: res.assistant.citations }]
-        })
+        const fullContent = res.assistant.content
+        const assistantId = res.assistant.id || `asst-${Date.now()}`
+        const citations = res.assistant.citations || []
+        
+        // Bắt đầu streaming token-by-token
+        setSending(false)
+        const words = fullContent.split(' ')
+        let currentText = ''
+        
+        setMessages((current) => [
+          ...current.filter((m) => m.id !== assistantId),
+          { id: assistantId, role: 'assistant', content: '▋' }
+        ])
+        
+        for (let i = 0; i < words.length; i++) {
+          currentText += (i === 0 ? '' : ' ') + words[i]
+          const isLast = i === words.length - 1
+          const displayingText = currentText + (isLast ? '' : ' ▋')
+          setMessages((current) =>
+            current.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: displayingText, ...(isLast ? { citations } : {}) }
+                : m
+            )
+          )
+          await new Promise((resolve) => setTimeout(resolve, 30))
+        }
       }
       void fetchCredits()
     }
     catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : 'Unable to send question')
-    }
-    finally {
       setSending(false)
     }
   }
@@ -846,9 +867,16 @@ function Workspace({ onMenu }: { onMenu: () => void }) {
                 </Message>
               ))}
               {sending && (
-                <Message from="assistant" className="assistant-message">
+                <Message from="assistant" className="assistant-message thinking-state">
                   <div className="assistant-avatar"><Sparkles size={15} /></div>
-                  <MessageContent className="answer-content"><span className="typing-dots"><i /><i /><i /></span></MessageContent>
+                  <MessageContent className="answer-content">
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="typing-dots"><i /><i /><i /></span>
+                      <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'DM Mono, monospace' }}>
+                        Model đang truy xuất vector chunks & suy luận...
+                      </span>
+                    </div>
+                  </MessageContent>
                 </Message>
               )}
             </ConversationContent>

@@ -13,6 +13,17 @@
 
 ---
 
+## 📚 Trung Tâm Tài Liệu & Cẩm Nang Kỹ Thuật (Documentation Hub)
+
+- 📘 [**Cẩm Nang Kỹ Thuật Toàn Diện (Full Product Technical Guide)**](docs/full_product_technical_guide.md): Kiến trúc 4 tầng, data schemas, API contracts, deployment runbook.
+- 🚀 [**Hành Trình Phát Triển Sản Phẩm (Development Journey & Engineering Logbook)**](docs/development_journey_recap.md): Lộ trình 6 giai đoạn từ Kaggle cluster R&D đến fullstack webapp và video showcase.
+- 📣 [**Bộ Caption & Kịch Bản Ra Mắt (Social Launch Kit)**](docs/social_launch_captions.md): Mẫu bài viết LinkedIn kỹ thuật sâu, bài đăng Fanpage FU-DEVER, Twitter thread và Release notes.
+- 🔴 [**Hướng Dẫn Cấu Hình Qdrant Vector DB**](docs/qdrant_guide.md): Quản lý collection, HNSW index và kết nối Qdrant Cloud.
+- ☁️ [**Hướng Dẫn Cloudflare Workers AI Embeddings**](docs/cloudflare_embedding_guide.md): Triển khai bge-large trên Edge network.
+- 📊 [**Báo Cáo Benchmark Layout Models**](docs/reports/multi_doc_50_pdf_benchmark_report.md): Thử nghiệm trên 50 tài liệu khoa học đa dạng.
+
+---
+
 ## 🏛️ Kiến Trúc Hệ Thống (System Architecture)
 
 ```mermaid
