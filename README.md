@@ -66,41 +66,12 @@ Hệ thống tài liệu chuyên sâu được chuẩn hóa cho nhà phát tri�
 
 ## 🏛️ Kiến Trúc Hệ Thống (System Architecture)
 
-```mermaid
-flowchart TB
-    subgraph Client["🖥️ TẦNG GIAO DIỆN (Frontend Layer - React 19 + TypeScript)"]
-        UI["Modern Research Workspace"]
-        StreamChat["Typewriter Realtime Streaming Chat"]
-        BBoxViewer["Interactive PDF Bounding Box Viewer"]
-    end
-
-    subgraph Orchestrator["⚙️ TẦNG ĐIỀU PHỐI (Orchestration Layer - Node.js ESM)"]
-        Express["Express REST API (Port 6100)"]
-        SSEHub["Server-Sent Events (SSE) Streaming Hub"]
-        LLMRouter["Multi-LLM Gateway Router<br/>(Groq Llama 3 • OpenRouter • Local Qwen)"]
-    end
-
-    subgraph Engine["🧠 TẦNG XỬ LÝ LÕI (Core RAG Engine - Python)"]
-        DoclingAST["Docling Parser (FastOCR & AST Extraction)"]
-        StructureChunker["Structure-Aware Chunker (Breadcrumbs & Tables)"]
-        LocalEmbedder["BAAI/bge-large-en-v1.5 (CUDA GPU)"]
-        EdgeEmbedder["Cloudflare Workers AI (@cf/baai/bge-large)"]
-    end
-
-    subgraph Storage["💾 TẦNG LƯU TRỮ HYBRID (Hybrid Storage Layer)"]
-        Qdrant[("Qdrant Cloud<br/>Vector Index 1536-dim (HNSW Cosine)<br/>P95 Latency: 18ms")]
-        Supabase[("Supabase PostgreSQL<br/>Users • Sessions • Messages • AST Chunks")]
-        ObjectStore[("S3 / Local Storage<br/>Raw PDF Archives & Previews")]
-    end
-
-    Client <-->|HTTP / SSE Streaming| Orchestrator
-    Orchestrator <-->|IPC & gRPC| Engine
-    Orchestrator <-->|PostgreSQL Client| Supabase
-    Orchestrator <-->|PDF Stream| ObjectStore
-    Engine <-->|Dense Vectors| Qdrant
-    Engine <-->|Structured JSONB| Supabase
-    Orchestrator <-->|External API| LLMRouter
-```
+<p align="center">
+  <img src="docs/assets/architecture_diagram.png" alt="SchoolSummar Full System Architecture" width="100%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid #E2E8F0;" />
+</p>
+<p align="center">
+  <em>Sơ đồ kiến trúc toàn luồng hệ thống SchoolSummar — Thiết kế theo chuẩn ấn phẩm hội nghị quốc tế, phân tách 3 phân vùng xử lý (Ingestion, Hybrid Storage, Realtime Streaming Serving) với giao thức truyền thông khép kín.</em>
+</p>
 
 ---
 

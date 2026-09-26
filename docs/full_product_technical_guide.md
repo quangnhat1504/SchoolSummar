@@ -41,43 +41,12 @@ Các bài báo khoa học (arXiv, IEEE, Nature, PubMed...) có định dạng PD
 
 ## 2. Kiến Trúc Hệ Thống (System Architecture)
 
-```mermaid
-flowchart TB
-    subgraph Presentation["🖥️ TẦNG GIAO DIỆN (Presentation Layer)"]
-        Landing["Landing Page (Storytelling & Aesthetic)"]
-        Workspace["Research Workspace (Split-Pane UI)"]
-        PDFViewer["PDF Canvas (Bounding Box Overlay)"]
-        ChatUI["Realtime Chat (Typewriter Token Streaming)"]
-    end
-
-    subgraph API_Gateway["⚙️ TẦNG ORCHESTRATION & GATEWAY (Node.js ESM)"]
-        Express["Express REST API (Port 6100)"]
-        AuthMid["Auth & Tenant Middleware"]
-        SessionMgr["Session & Chat Memory Manager"]
-        Router["Multi-LLM Gateway Router (Groq, OpenRouter, Local Qwen)"]
-    end
-
-    subgraph Core_Engine["🧠 TẦNG RAG ENGINE (Python Core)"]
-        Docling["Docling Parser (FastOCR & AST Extraction)"]
-        ASTChunker["Structure-Aware Chunker (Breadcrumbs & Tables)"]
-        DenseEmbed["BAAI/bge-large-en-v1.5 (CUDA GPU)"]
-        CFEmbed["Cloudflare Workers AI (@cf/baai/bge-large-en-v1.5)"]
-    end
-
-    subgraph Storage_Layer["💾 TẦNG LƯU TRỮ & VECTOR DB (Data Layer)"]
-        Qdrant[("Qdrant Cloud<br/>Collection: schoolsummar_chunks<br/>Vector: 1536-dim / Cosine")]
-        Supabase[("Supabase PostgreSQL<br/>- Users & Sessions<br/>- Papers & AST Chunks<br/>- Audit Logs")]
-        S3Bucket[("Object Storage (S3 / Local)<br/>Raw PDF & Previews")]
-    end
-
-    Presentation <-->|HTTP / SSE Streaming| API_Gateway
-    API_Gateway <-->|ChildProcess / gRPC| Core_Engine
-    API_Gateway <-->|SQL Client| Supabase
-    API_Gateway <-->|PDF Stream| S3Bucket
-    Core_Engine <-->|Dense Upsert & Search| Qdrant
-    Core_Engine <-->|Metadata & Chunks| Supabase
-    API_Gateway <-->|REST API Call| Router
-```
+<p align="center">
+  <img src="assets/architecture_diagram.png" alt="SchoolSummar Full System Architecture" width="100%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid #E2E8F0;" />
+</p>
+<p align="center">
+  <em>Hình 1: Toàn cảnh Kiến trúc Hệ thống SchoolSummar (End-to-End System Architecture) — Thiết kế theo tiêu chuẩn ấn phẩm quốc tế, trực quan hóa 3 phân vùng xử lý đồng bộ: Ingestion & Feature Engineering, Dual Storage Layer, và Realtime Grounded Inference Engine.</em>
+</p>
 
 ---
 
