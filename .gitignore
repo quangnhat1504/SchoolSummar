@@ -19,6 +19,7 @@ __pycache__/
 /storage/
 tests/
 *.png
+!docs/assets/*.png
 .runtime/
 .agents/
 .freebuff/
@@ -31,6 +32,7 @@ tests/
 *.bin
 *.onnx
 *.mp4
+!docs/assets/*.mp4
 *.zip
 *.rar
 *.tar.gz

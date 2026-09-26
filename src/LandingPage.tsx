@@ -60,7 +60,7 @@ export function LandingPage() {
     const page = document.querySelector<HTMLElement>('.landing-page')
     if (!page) return
 
-    const sections = Array.from(page.querySelectorAll<HTMLElement>('.signal-strip, .landing-section, .landing-footer'))
+    const sections = Array.from(page.querySelectorAll<HTMLElement>('.signal-strip, .landing-section'))
     page.classList.add('motion-ready')
 
     if (!('IntersectionObserver' in window)) {
@@ -104,6 +104,35 @@ export function LandingPage() {
       <section className="landing-section final-section"><div className="landing-container final-card"><div className="final-grid-art" /><span className="landing-eyebrow">THE NEXT PAGE IS YOURS</span><h2>Bring your hardest<br /><em>question.</em></h2><p>Start with one paper. Leave with a clearer path through the whole field.</p><Link className="landing-primary-button" to="/workspace">Enter RAG Research <ArrowRight size={17} /></Link><span className="final-note"><BookOpen size={15} /> Your research workspace is ready</span></div></section>
     </main>
 
-    <footer className="landing-footer"><div className="landing-container footer-inner"><LandingLogo /><span>Research, with receipts.</span><div><Link to="/workspace">Workspace</Link><a href="#capabilities">Capabilities</a><a href="#how-it-works">How it works</a></div></div></footer>
+    <footer className="landing-footer">
+      <div className="landing-container footer-inner">
+        <LandingLogo />
+        <span>Research, with receipts.</span>
+        <div>
+          <Link to="/workspace">Workspace</Link>
+          <a href="#capabilities">Capabilities</a>
+          <a href="#how-it-works">How it works</a>
+        </div>
+      </div>
+      <div className="landing-subfooter">
+        <div className="landing-container subfooter-inner">
+          <a
+            href="https://fudever.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="subfooter-dev-link"
+            title="Câu Lạc Bộ Lập Trình FU-DEVER (FPT University Da Nang)"
+          >
+            <span className="subfooter-dev-label">developed by</span>
+            <img
+              src="/brand/logodeverkochu-01.png"
+              alt="FU-DEVER Logo"
+              className="fudever-logo-icon"
+            />
+            <strong className="fudever-brand">FU-DEVER</strong>
+          </a>
+        </div>
+      </div>
+    </footer>
   </div>
 }
