@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1600" height="1020" viewBox="0 0 1600 1020" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background & Card Gradients -->
+    <linearGradient id="canvas-bg" x1="0" y1="0" x2="1600" y2="1020" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F8FAFC"/>
+    </linearGradient>
+
+    <linearGradient id="card-hero-blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#0369A1"/>
+    </linearGradient>
+
+    <linearGradient id="card-hero-violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6554DF"/>
+      <stop offset="100%" stop-color="#4F46E5"/>
+    </linearGradient>
+
+    <linearGradient id="card-hero-mint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0D9488"/>
+      <stop offset="100%" stop-color="#0F766E"/>
+    </linearGradient>
+
+    <!-- Arrow Markers -->
+    <marker id="arrow-solid" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#334155"/>
+    </marker>
+
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#0284C7"/>
+    </marker>
+
+    <marker id="arrow-violet" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#4F46E5"/>
+    </marker>
+
+    <marker id="arrow-mint" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#0D9488"/>
+    </marker>
+
+    <!-- Drop Shadows -->
+    <filter id="shadow-sm" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0F172A" flood-opacity="0.06"/>
+    </filter>
+    <filter id="shadow-md" x="-10%" y="-10%" width="120%" height="125%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#0F172A" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Canvas Frame -->
+  <rect width="1600" height="1020" rx="16" fill="url(#canvas-bg)"/>
+  <rect width="1598" height="1018" x="1" y="1" rx="15" fill="none" stroke="#E2E8F0" stroke-width="2"/>
+
+  <!-- ========================================================================= -->
+  <!-- HEADER SECTION -->
+  <!-- ========================================================================= -->
+  <g id="header" transform="translate(60, 36)">
+    <rect x="0" y="0" width="36" height="36" rx="9" fill="#6554DF"/>
+    <text x="18" y="25" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="19" font-weight="900" fill="#FFFFFF">R</text>
+    <text x="50" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="23" font-weight="800" fill="#0F172A" letter-spacing="-0.03em">SchoolSummar RAG — Full System Architecture</text>
+    <text x="615" y="24" font-family="'DM Mono', monospace, Courier" font-size="12" font-weight="600" fill="#64748B">END-TO-END RESEARCH WORKFLOW</text>
+    
+    <g transform="translate(1120, 2)">
+      <rect x="0" y="0" width="160" height="30" rx="15" fill="#F1F5F9" stroke="#CBD5E1"/>
+      <circle cx="15" cy="15" r="5" fill="#10B981"/>
+      <text x="28" y="19" font-family="'DM Mono', monospace" font-size="11" font-weight="600" fill="#334155">Docling AST • 60fps</text>
+    </g>
+    <g transform="translate(1295, 2)">
+      <rect x="0" y="0" width="185" height="30" rx="15" fill="#EEF2FF" stroke="#C7D2FE"/>
+      <text x="92" y="19" text-anchor="middle" font-family="'DM Mono', monospace" font-size="11" font-weight="600" fill="#4F46E5">CLB FU-DEVER • 2026</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 1: INGESTION & DOCUMENT INDEXING (OFFLINE / ASYNC) -->
+  <!-- ========================================================================= -->
+  <g id="lane-1" transform="translate(60, 95)">
+    <rect width="1480" height="235" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <rect width="1476" height="231" x="2" y="2" rx="12" fill="#F8FAFC" fill-opacity="0.6"/>
+    <rect x="24" y="-13" width="370" height="26" rx="6" fill="#0F172A"/>
+    <text x="36" y="4" font-family="'DM Mono', monospace" font-size="11" font-weight="700" fill="#F8FAFC" letter-spacing="0.05em">PHASE 1: INGESTION &amp; STRUCTURE INDEXING</text>
+
+    <!-- Node 1: PDF Documents -->
+    <g id="node-pdf" transform="translate(30, 48)">
+      <rect width="230" height="138" rx="10" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="70" height="20" rx="4" fill="#F1F5F9"/>
+      <text x="49" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#475569">DATASET</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Research Papers</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">PDF Multi-Column Layout</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" fill="#94A3B8">arXiv • Nature • IEEE</text>
+    </g>
+
+    <!-- Node 2: Docling AST Parser -->
+    <g id="node-parser" transform="translate(320, 48)">
+      <rect width="250" height="138" rx="10" fill="#FFFFFF" stroke="#6554DF" stroke-width="1.8" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="95" height="20" rx="4" fill="#EEF2FF"/>
+      <text x="61" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#4F46E5">DOCLING CORE</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Docling AST Parser</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">Layout Detection &amp; FastOCR</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" font-weight="600" fill="#4F46E5">✓ Markdown Tables 100%</text>
+    </g>
+
+    <!-- Node 3: Structure-Aware Chunking -->
+    <g id="node-chunker" transform="translate(630, 48)">
+      <rect width="250" height="138" rx="10" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.5" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="90" height="20" rx="4" fill="#CCFBF1"/>
+      <text x="59" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#0F766E">HIERARCHY</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Structure Chunking</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">Breadcrumb Context Tree</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" fill="#0D9488"># Title &gt; ## Section &gt; BBox</text>
+    </g>
+
+    <!-- Node 4: Dense Embedding -->
+    <g id="node-embed" transform="translate(940, 48)">
+      <rect width="230" height="138" rx="10" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="85" height="20" rx="4" fill="#F1F5F9"/>
+      <text x="56" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#475569">EMBEDDING</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Dense Vectors</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">bge-large-en-v1.5</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" fill="#64748B">CUDA GPU / Cloudflare</text>
+    </g>
+
+    <!-- Node 5: Qdrant & Supabase (Hero Card) -->
+    <g id="node-store" transform="translate(1230, 38)">
+      <rect width="220" height="158" rx="12" fill="url(#card-hero-blue)" stroke="#0369A1" stroke-width="2" filter="url(#shadow-md)"/>
+      <rect x="14" y="14" width="70" height="20" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+      <text x="49" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#FFFFFF">STORAGE</text>
+      <text x="14" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="800" fill="#FFFFFF">Qdrant Cloud</text>
+      <text x="14" y="84" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="700" fill="#E0F2FE">&amp; Supabase PG</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" font-weight="500" fill="#BAE6FD">1536-dim HNSW Index</text>
+      <text x="14" y="134" font-family="'DM Mono', monospace" font-size="11" font-weight="500" fill="#BAE6FD">JSONB AST Nodes • RLS</text>
+    </g>
+
+    <!-- Flow Connectors Lane 1 -->
+    <path d="M 260 117 L 320 117" stroke="#334155" stroke-width="2" marker-end="url(#arrow-solid)"/>
+    <path d="M 570 117 L 630 117" stroke="#334155" stroke-width="2" marker-end="url(#arrow-solid)"/>
+    <path d="M 880 117 L 940 117" stroke="#334155" stroke-width="2" marker-end="url(#arrow-solid)"/>
+    <path d="M 1170 117 L 1230 117" stroke="#0284C7" stroke-width="2.5" marker-end="url(#arrow-blue)"/>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 2: ONLINE RETRIEVAL & CONTEXT ASSEMBLY -->
+  <!-- ========================================================================= -->
+  <g id="lane-2" transform="translate(60, 390)">
+    <rect width="1480" height="235" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <rect width="1476" height="231" x="2" y="2" rx="12" fill="#F0FDF4" fill-opacity="0.35"/>
+    <rect x="24" y="-13" width="370" height="26" rx="6" fill="#047857"/>
+    <text x="36" y="4" font-family="'DM Mono', monospace" font-size="11" font-weight="700" fill="#ECFDF5" letter-spacing="0.05em">PHASE 2: ONLINE RETRIEVAL &amp; CONTEXT ASSEMBLY</text>
+
+    <!-- Node 6: User Query -->
+    <g id="node-query" transform="translate(30, 48)">
+      <rect width="230" height="138" rx="10" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="80" height="20" rx="4" fill="#F1F5F9"/>
+      <text x="54" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#475569">USER QUERY</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Research Question</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">Natural Language Input</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" fill="#94A3B8">"Compare Table 2 with SOTA"</text>
+    </g>
+
+    <!-- Node 7: Query Encoder -->
+    <g id="node-qembed" transform="translate(320, 48)">
+      <rect width="250" height="138" rx="10" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="70" height="20" rx="4" fill="#F1F5F9"/>
+      <text x="49" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#475569">ENCODER</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Query Encoder</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">Shared BGE Embedding</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" fill="#64748B">Cosine Vector Representation</text>
+    </g>
+
+    <!-- Node 8: Hybrid Top-K Retrieval -->
+    <g id="node-retrieve" transform="translate(630, 48)">
+      <rect width="270" height="138" rx="10" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.8" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="85" height="20" rx="4" fill="#E0F2FE"/>
+      <text x="56" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#0369A1">RETRIEVAL</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Hybrid Top-K Search</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">Single-Stage Payload Filtering</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" font-weight="600" fill="#0284C7">filter: paperId &amp; page • P95: 18ms</text>
+    </g>
+
+    <!-- Node 9: Context Assembly -->
+    <g id="node-context" transform="translate(960, 48)">
+      <rect width="250" height="138" rx="10" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.5" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="80" height="20" rx="4" fill="#CCFBF1"/>
+      <text x="54" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#0F766E">ASSEMBLY</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Grounded Context</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">Passages + Bounding Boxes</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" fill="#0D9488">[ymin, xmin, ymax, xmax]</text>
+    </g>
+
+    <!-- Flow Connectors Lane 2 -->
+    <path d="M 260 117 L 320 117" stroke="#334155" stroke-width="2" marker-end="url(#arrow-solid)"/>
+    <path d="M 570 117 L 630 117" stroke="#334155" stroke-width="2" marker-end="url(#arrow-solid)"/>
+    <path d="M 900 117 L 960 117" stroke="#0D9488" stroke-width="2" marker-end="url(#arrow-mint)"/>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- CROSS-LANE 1 -> 2: STORAGE TO RETRIEVAL (CLEAR OF ALL BOXES) -->
+  <!-- ========================================================================= -->
+  <!-- From Node 5 bottom (1400, 291) down to y=360, left to x=825 (top of Node 8), down to Node 8 top (825, 438) -->
+  <path d="M 1400 291 L 1400 360 L 825 360 L 825 436" stroke="#0284C7" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#arrow-blue)"/>
+  <rect x="980" y="348" width="220" height="24" rx="5" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.2" filter="url(#shadow-sm)"/>
+  <text x="1090" y="364" text-anchor="middle" font-family="'DM Mono', monospace" font-size="11" font-weight="700" fill="#0369A1">HNSW Vector Lookup (18ms)</text>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 3: MULTI-LLM REASONING & GROUNDED VERIFICATION -->
+  <!-- ========================================================================= -->
+  <g id="lane-3" transform="translate(60, 685)">
+    <rect width="1480" height="235" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" filter="url(#shadow-sm)"/>
+    <rect width="1476" height="231" x="2" y="2" rx="12" fill="#EEF2FF" fill-opacity="0.35"/>
+    <rect x="24" y="-13" width="370" height="26" rx="6" fill="#4338CA"/>
+    <text x="36" y="4" font-family="'DM Mono', monospace" font-size="11" font-weight="700" fill="#EEF2FF" letter-spacing="0.05em">PHASE 3: MULTI-LLM REASONING &amp; VERIFICATION</text>
+
+    <!-- Node 10: Multi-LLM Gateway Router (Hero Card) -->
+    <g id="node-gateway" transform="translate(30, 48)">
+      <rect width="250" height="138" rx="10" fill="url(#card-hero-violet)" stroke="#4338CA" stroke-width="2" filter="url(#shadow-md)"/>
+      <rect x="14" y="14" width="70" height="20" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+      <text x="49" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#FFFFFF">ROUTER</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="800" fill="#FFFFFF">Multi-LLM Gateway</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#E0E7FF">Groq Llama 3 70B • Qwen2.5</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" font-weight="500" fill="#C7D2FE">&gt;250 tok/s • Failover Resilient</text>
+    </g>
+
+    <!-- Node 11: Negative Rejection Gate -->
+    <g id="node-guard" transform="translate(350, 48)">
+      <rect width="250" height="138" rx="10" fill="#FFFFFF" stroke="#DC2626" stroke-width="1.8" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="95" height="20" rx="4" fill="#FEE2E2"/>
+      <text x="61" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#B91C1C">GUARDRAIL</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Negative Rejection</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">Anti-Hallucination Filter</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" font-weight="600" fill="#DC2626">Zero Hallucination (0.4%)</text>
+    </g>
+
+    <!-- Node 12: Typewriter Streaming Engine -->
+    <g id="node-streaming" transform="translate(670, 48)">
+      <rect width="250" height="138" rx="10" fill="#FFFFFF" stroke="#6554DF" stroke-width="1.8" filter="url(#shadow-sm)"/>
+      <rect x="14" y="14" width="85" height="20" rx="4" fill="#EEF2FF"/>
+      <text x="56" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#4F46E5">STREAMING</text>
+      <text x="14" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#0F172A">Typewriter Engine</text>
+      <text x="14" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">SSE Token-by-Token</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" font-weight="600" fill="#6554DF">30ms Pace • Blinking ▋</text>
+    </g>
+
+    <!-- Node 13: Grounded Answer & Receipts (Hero Card) -->
+    <g id="node-answer" transform="translate(990, 38)">
+      <rect width="280" height="158" rx="12" fill="url(#card-hero-mint)" stroke="#0F766E" stroke-width="2" filter="url(#shadow-md)"/>
+      <rect x="14" y="14" width="85" height="20" rx="4" fill="#FFFFFF" fill-opacity="0.2"/>
+      <text x="56" y="28" text-anchor="middle" font-family="'DM Mono', monospace" font-size="10" font-weight="700" fill="#FFFFFF">DELIVERABLE</text>
+      <text x="14" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="800" fill="#FFFFFF">Grounded Answer &amp;</text>
+      <text x="14" y="84" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="700" fill="#CCFBF1">Bounding Box Receipts</text>
+      <text x="14" y="114" font-family="'DM Mono', monospace" font-size="11" font-weight="500" fill="#CCFBF1">Clickable [Page 4, Table 2]</text>
+      <text x="14" y="134" font-family="'DM Mono', monospace" font-size="11" font-weight="500" fill="#CCFBF1">Instant PDF Canvas Jump</text>
+    </g>
+
+    <!-- Flow Connectors Lane 3 -->
+    <path d="M 280 117 L 350 117" stroke="#334155" stroke-width="2" marker-end="url(#arrow-solid)"/>
+    <path d="M 600 117 L 670 117" stroke="#334155" stroke-width="2" marker-end="url(#arrow-solid)"/>
+    <path d="M 920 117 L 990 117" stroke="#0D9488" stroke-width="2.5" marker-end="url(#arrow-mint)"/>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- CROSS-LANE 2 -> 3: CONTEXT TO GATEWAY ROUTER (ROUTED IN GUTTER AVOIDING PILL) -->
+  <!-- ========================================================================= -->
+  <!-- From Node 9 bottom (1145, 576) down to gutter y=655, left to x=40, down to y=802 (center of Node 10), right into Node 10 left (88, 802) -->
+  <path d="M 1145 576 L 1145 655 L 42 655 L 42 802 L 88 802" stroke="#4F46E5" stroke-width="2.2" fill="none" marker-end="url(#arrow-violet)"/>
+  <rect x="520" y="643" width="230" height="24" rx="5" fill="#FFFFFF" stroke="#4F46E5" stroke-width="1.2" filter="url(#shadow-sm)"/>
+  <text x="635" y="659" text-anchor="middle" font-family="'DM Mono', monospace" font-size="11" font-weight="700" fill="#4338CA">Augmented Prompt Payload</text>
+
+  <!-- ========================================================================= -->
+  <!-- INTERACTIVE CITATION FEEDBACK LOOP: ANSWER TO PDF VIEW (OUTER CIRCUIT) -->
+  <!-- ========================================================================= -->
+  <!-- From Node 13 right (1330, 802) -> right to x=1560 -> down to y=960 -> left along bottom gutter to x=42 -> up to Node 1 left (88, 212) -->
+  <!-- Wait: let's route cleanly: from Node 13 right (1330, 802) -> x=1565 -> down to y=965 -> left to x=25 -> up to y=212 -> right into Node 1 left (88, 212) -->
+  <path d="M 1330 802 L 1565 802 L 1565 965 L 25 965 L 25 212 L 88 212" stroke="#0D9488" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-mint)"/>
+  <rect x="630" y="953" width="340" height="24" rx="5" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.2" filter="url(#shadow-sm)"/>
+  <text x="800" y="969" text-anchor="middle" font-family="'DM Mono', monospace" font-size="11" font-weight="700" fill="#0F766E">Interactive Bounding Box Verification on PDF Canvas</text>
+
+</svg>

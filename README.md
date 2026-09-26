@@ -1,201 +1,84 @@
-# SchoolSummar — Scientific Research RAG Workspace
+# SchoolSummar
+
+> Structure-Aware RAG Platform for Complex Scientific Documents.
+
+SchoolSummar là hệ thống Retrieval-Augmented Generation (RAG) mã nguồn mở chuyên sâu cho việc đọc hiểu, tra cứu và phân tích các bài báo khoa học định dạng PDF phức tạp. Hệ thống khắc phục các hạn chế cố hữu của RAG truyền thống bằng cách kết hợp phân tích cây cú pháp (AST Hierarchy) của Docling, tìm kiếm vector độ trễ thấp trên Qdrant Cloud, lưu trữ quan hệ Supabase và kiểm chứng thông tin trực quan qua Bounding Box citations.
+
+---
+
+## Demo Preview
 
 <p align="center">
-  <img src="docs/assets/fudever_logo.png" alt="FU-DEVER Logo" width="64" height="64" />
+  <img src="docs/assets/demo_preview.gif" alt="SchoolSummar Interface Demo" width="100%" style="border-radius: 8px; border: 1px solid #E2E8F0;" />
 </p>
+
+- **Video Showcase (Full HD, 60 FPS)**: [docs/assets/rag_showcase_product.mp4](docs/assets/rag_showcase_product.mp4)
+
+---
+
+## Kiến Trúc Hệ Thống (System Architecture)
 
 <p align="center">
-  <strong>Trợ lý Nghiên cứu Khoa học Đột phá — Phân tích Cấu trúc Đa tầng (Structure-Aware AST), Bảo tồn 100% Bảng biểu và Triệt tiêu Ảo giác bằng Bounding Box Receipts.</strong>
+  <img src="docs/assets/architecture_diagram.png" alt="SchoolSummar System Architecture" width="100%" style="border-radius: 8px; border: 1px solid #E2E8F0;" />
 </p>
 
-<p align="center">
-  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19.0-61dafb?logo=react&logoColor=black" alt="React 19" /></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.7+-3178c6?logo=typescript&logoColor=white" alt="TypeScript" /></a>
-  <a href="https://qdrant.tech/"><img src="https://img.shields.io/badge/Qdrant-Cloud_Vector_DB-dc2626?logo=qdrant&logoColor=white" alt="Qdrant Cloud" /></a>
-  <a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-PostgreSQL_15+-3ecf8e?logo=supabase&logoColor=white" alt="Supabase" /></a>
-  <a href="https://github.com/DS4SD/docling"><img src="https://img.shields.io/badge/Parser-Docling_IBM_AST-052FAD?logo=ibm&logoColor=white" alt="Docling" /></a>
-  <a href="https://vitejs.dev/"><img src="https://img.shields.io/badge/Vite-Latest-646cff?logo=vite&logoColor=white" alt="Vite" /></a>
-  <a href="https://fudever.com"><img src="https://img.shields.io/badge/Developed_by-FU--DEVER-6554df?logo=fpt&logoColor=white" alt="FU-DEVER" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License MIT" /></a>
-</p>
+Hệ thống được thiết kế theo mô hình phân tầng module hóa:
+- **Ingestion Pipeline**: Sử dụng Docling trích xuất cây cú pháp (Document AST), bảo tồn phân cấp tiêu đề (Breadcrumbs) và cấu trúc bảng biểu Markdown nguyên vẹn.
+- **Hybrid Storage**: Kết hợp Qdrant Cloud (Cosine Similarity 1536-dim) cho tìm kiếm vector và Supabase PostgreSQL cho quản lý phiên làm việc, người dùng và dữ liệu có cấu trúc.
+- **Serving & Verification**: Node.js REST/SSE Gateway hỗ trợ streaming token thời gian thực và tương tác trực tiếp với tọa độ Bounding Box trên PDF gốc.
 
 ---
 
-## 🎬 Video Showcase Sản Phẩm (Product Demo)
+## Tính Năng Chính (Key Features)
 
-> Được tự động hóa ghi hình ở **60 FPS Full HD** bằng Playwright, biên tập âm thanh DSP và master qua FFmpeg kết hợp Intro 3D thương hiệu **FU-DEVER Hyperframes**.
-
-<p align="center">
-  <img src="docs/assets/demo_preview.gif" alt="SchoolSummar Interactive Demo" width="100%" style="border-radius: 10px; border: 1px solid rgba(18, 34, 59, 0.15); box-shadow: 0 10px 30px rgba(0,0,0,0.1);" />
-</p>
-
-<p align="center">
-  📥 <strong><a href="docs/assets/rag_showcase_product.mp4">Xem / Tải Video Full HD 60fps Bản Gốc (12 MB .mp4)</a></strong> • 
-  <a href="docs/development_journey_recap.md#giai-đoạn-6-tự-động-hóa-sản-xuất-media-showcase--ghép-brand-intro">Xem quy trình sản xuất video</a>
-</p>
+- **Structure-Aware Document Chunking**: Phân đoạn dựa trên ranh giới ngữ nghĩa và cây AST, bảo toàn cấu trúc bảng biểu phức tạp và cây phân cấp tiêu đề.
+- **Grounded Verification (Bounding Box Receipts)**: Mỗi luận điểm trích xuất đều liên kết trực tiếp với tọa độ không gian `[ymin, xmin, ymax, xmax]` trên trang PDF, cho phép kiểm chứng nguồn gốc tức thì.
+- **Realtime Token Streaming**: Phản hồi dạng typewriter thông qua Server-Sent Events với độ trễ phản hồi token đầu (TTFT) tối ưu (< 450ms).
+- **Multi-Provider LLM Gateway**: Hỗ trợ chuyển đổi linh hoạt giữa các nhà cung cấp mô hình (Groq, OpenRouter) và mô hình cục bộ.
 
 ---
 
-## 📚 Trung Tâm Tài Liệu & Cẩm Nang Kỹ Thuật (Documentation Hub)
-
-Hệ thống tài liệu chuyên sâu được chuẩn hóa cho nhà phát triển và cộng đồng nghiên cứu:
-
-| Tài liệu | Mô tả chi tiết |
-| :--- | :--- |
-| 📘 [**Cẩm Nang Kỹ Thuật Toàn Diện (Full Product Guide)**](docs/full_product_technical_guide.md) | Kiến trúc 4 tầng, Data Schemas, REST/SSE API Contracts, Ingestion Pipeline, và hướng dẫn triển khai Production. |
-| 🚀 [**Hành Trình Phát Triển Sản Phẩm (Engineering Logbook)**](docs/development_journey_recap.md) | Lộ trình 6 giai đoạn: từ huấn luyện Kaggle Cluster 13 GPUs, chuyển dịch sang Docling, tích hợp Vector Hybrid đến UI 60fps. |
-| 📣 [**Bộ Caption & Kịch Bản Ra Mắt (Social Launch Kit)**](docs/social_launch_captions.md) | Mẫu bài viết học thuật chuyên sâu cho LinkedIn, bài truyền thông Fanpage FU-DEVER, Twitter thread 7-parts và GitHub Release. |
-| 🔴 [**Hướng Dẫn Cấu Hình Qdrant Vector DB**](docs/qdrant_guide.md) | Quản lý Collections, HNSW Cosine Index, Payload Filter, và công cụ CLI. |
-| ☁️ [**Hướng Dẫn Cloudflare Workers AI Embeddings**](docs/cloudflare_embedding_guide.md) | Triển khai mô hình nhúng `bge-large` trên mạng lưới Edge Network. |
-| 📊 [**Báo Cáo Benchmark Layout Models**](docs/reports/multi_doc_50_pdf_benchmark_report.md) | Kết quả kiểm thử trích xuất trên 50 tài liệu khoa học đa dạng. |
-
----
-
-## ⚡ Điểm Khác Biệt: Traditional RAG vs. SchoolSummar
-
-| Tiêu chí | Hệ thống RAG Truyền Thống | SchoolSummar (RAG Research) |
-| :--- | :--- | :--- |
-| **Xử lý Bố cục PDF** | OCR phẳng hoặc cắt chuỗi cố định (Fixed 500-1000 tokens) | **Cây Cú Pháp Tài Liệu (Docling AST Hierarchy)** đa cột thông minh |
-| **Bảo tồn Bảng biểu** | Bị cắt vụn ngang giữa các hàng, mất liên kết dữ liệu | **100% nguyên vẹn cấu trúc Markdown Tables**, không bao giờ bị cắt đôi |
-| **Ngữ cảnh Tiêu đề** | Đoạn văn bản bị tách rời, không rõ thuộc mục nào | **Breadcrumb Lineage** đính kèm (`# Title > ## Methods > ### Setup`) |
-| **Xác thực Nguồn** | Chỉ ghi chung chung *"theo tài liệu"* hoặc số trang | **Biên lai Bounding Box `[ymin, xmin, ymax, xmax]`** tương tác trực tiếp |
-| **Kiểm soát Ảo giác** | LLM tự phỏng đoán số liệu khi thiếu thông tin | **Cơ chế Negative Rejection** (từ chối thẳng thắn nếu thiếu căn cứ) |
-| **Tốc độ Phản hồi** | Chờ tải xong cả đoạn text mới hiển thị | **Typewriter Token-by-Token Streaming (30ms/từ)** kèm con trỏ `▋` |
-
----
-
-## 🏛️ Kiến Trúc Hệ Thống (System Architecture)
-
-```mermaid
-flowchart TB
-    subgraph Client["🖥️ TẦNG GIAO DIỆN (Frontend Layer - React 19 + TypeScript)"]
-        UI["Modern Research Workspace"]
-        StreamChat["Typewriter Realtime Streaming Chat"]
-        BBoxViewer["Interactive PDF Bounding Box Viewer"]
-    end
-
-    subgraph Orchestrator["⚙️ TẦNG ĐIỀU PHỐI (Orchestration Layer - Node.js ESM)"]
-        Express["Express REST API (Port 6100)"]
-        SSEHub["Server-Sent Events (SSE) Streaming Hub"]
-        LLMRouter["Multi-LLM Gateway Router<br/>(Groq Llama 3 • OpenRouter • Local Qwen)"]
-    end
-
-    subgraph Engine["🧠 TẦNG XỬ LÝ LÕI (Core RAG Engine - Python)"]
-        DoclingAST["Docling Parser (FastOCR & AST Extraction)"]
-        StructureChunker["Structure-Aware Chunker (Breadcrumbs & Tables)"]
-        LocalEmbedder["BAAI/bge-large-en-v1.5 (CUDA GPU)"]
-        EdgeEmbedder["Cloudflare Workers AI (@cf/baai/bge-large)"]
-    end
-
-    subgraph Storage["💾 TẦNG LƯU TRỮ HYBRID (Hybrid Storage Layer)"]
-        Qdrant[("Qdrant Cloud<br/>Vector Index 1536-dim (HNSW Cosine)<br/>P95 Latency: 18ms")]
-        Supabase[("Supabase PostgreSQL<br/>Users • Sessions • Messages • AST Chunks")]
-        ObjectStore[("S3 / Local Storage<br/>Raw PDF Archives & Previews")]
-    end
-
-    Client <-->|HTTP / SSE Streaming| Orchestrator
-    Orchestrator <-->|IPC & gRPC| Engine
-    Orchestrator <-->|PostgreSQL Client| Supabase
-    Orchestrator <-->|PDF Stream| ObjectStore
-    Engine <-->|Dense Vectors| Qdrant
-    Engine <-->|Structured JSONB| Supabase
-    Orchestrator <-->|External API| LLMRouter
-```
-
----
-
-## ✨ Các Tính Năng Đột Phá (Key Features)
-
-### 1. Phân Tích Cú Pháp Bậc Cao (Docling AST & Table Preservation)
-Hệ thống không chia đoạn theo số ký tự cứng nhắc mà phân tích cấu trúc cây phả hệ tài liệu:
-- Nhận diện chính xác bố cục 2 cột, 3 cột, khối trích dẫn và chú thích hình ảnh.
-- Bảng biểu được số hóa sang Markdown hoàn chỉnh, bảo đảm LLM đọc hiểu trọn vẹn từng cột, hàng và số liệu thống kê.
-
-### 2. Biên Lai Xác Thực Tương Tác (Grounded Receipts & Bounding Boxes)
-Mỗi khẳng định số liệu hoặc luận điểm trong câu trả lời đều đính kèm thẻ trích dẫn. Người dùng chỉ cần click vào thẻ:
-- Màn hình tự động cuộn đến đúng trang PDF gốc.
-- Hệ thống vẽ khung chữ nhật tím phát sáng quanh tọa độ Bounding Box của dữ liệu, minh bạch 100% nguồn gốc thông tin.
-
-### 3. Trải Nghiệm Thời Gian Thực Chuẩn Taste (Realtime Streaming UI)
-- **Typewriter Token-by-Token Streaming:** Đẩy từng từ ra màn hình với con trỏ nhấp nháy `▋` theo nhịp gõ 30ms tự nhiên.
-- **Thinking & Retrieval State:** Hiển thị rõ ràng trạng thái `Model đang truy xuất vector chunks & suy luận...` cùng hiệu ứng sóng lượn.
-- **Split-Pane Ergonomics:** Màn hình chia đôi: bên trái hỏi đáp với AI, bên phải đối chiếu tài liệu gốc song song.
-
-### 4. Hạ Tầng Hybrid Cloud Bền Vững (Qdrant Cloud + Supabase)
-- **Qdrant Cloud:** Tìm kiếm tương đồng Cosine siêu tốc với Payload Filtering đa tiêu chí (`paperId`, `pageIndex`).
-- **Supabase PostgreSQL:** Quản lý phiên làm việc, phân quyền Row Level Security (RLS) và lưu trữ cây AST dạng `jsonb`.
-- **Multi-LLM Gateway:** Tự động chuyển đổi mượt mà giữa mô hình bảo mật cục bộ (Qwen2.5-7B) và siêu tốc đám mây (Groq Llama 3 70B với >250 tokens/giây).
-
----
-
-## 📊 Kết Quả Benchmark Thực Nghiệm (Empirical Benchmark)
-
-Dựa trên báo cáo thử nghiệm trên 50 tài liệu khoa học phức tạp ([Xem báo cáo chi tiết](docs/reports/multi_doc_50_pdf_benchmark_report.md)):
-
-| Chỉ Số Đánh Giá | Mục Tiêu Kỹ Thuật | Kết Quả Thực Tế | Đánh Giá |
-| :--- | :--- | :--- | :--- |
-| **Độ toàn vẹn bảng biểu (Table Integrity)** | $> 95\%$ | **$100\%$** | Không một bảng dữ liệu nào bị cắt đứt hàng |
-| **Tỷ lệ ảo giác (Hallucination Rate)** | $< 3\%$ | **$0.4\%$** | Nhờ cơ chế Negative Rejection bắt buộc |
-| **Thời gian phản hồi Token đầu (TTFT)** | $< 800\text{ ms}$ | **$380 - 450\text{ ms}$** | Siêu tốc (Groq Llama 3) |
-| **Độ trễ tìm kiếm Vector Qdrant (P95)** | $< 50\text{ ms}$ | **$18\text{ ms}$** | HNSW Cosine Index |
-| **Tần số hiển thị tương tác giao diện** | $60\text{ FPS}$ | **$60\text{ FPS}$** | Zero-latency Native Mouse Cursor |
-
----
-
-## 📁 Cấu Trúc Thư Mục Chuẩn (Project Layout)
+## Cấu Trúc Thư Mục (Directory Structure)
 
 ```text
 SchoolSummar/
-├── src/                        # 🎨 Frontend Webapp (React 19 + TypeScript + Vite)
-│   ├── App.tsx                 # Giao diện Workspace (Split-Pane, Typewriter Streaming)
-│   ├── LandingPage.tsx         # Landing Page giới thiệu sản phẩm & Brand FU-DEVER
-│   ├── components/             # Thư viện UI Components, PDF Canvas & Citations
-│   └── styles.css              # Hệ thống Design Tokens & CSS Animations 60fps
-│
-├── server/                     # 🚀 Backend Orchestrator (Node.js ESM)
-│   ├── app.mjs                 # REST API Express, SSE Hub & Session Management
-│   ├── llm.mjs                 # Multi-Provider LLM Gateway Router & Failover
-│   ├── qdrant.mjs              # Qdrant Cloud Client & Vector Search Adapter
-│   └── docling.mjs             # Adapter điều phối Ingestion Docling
-│
-├── rag_engine/                 # 🧠 Core Python RAG Engine
-│   ├── chunkers/               # Docling Structure-Aware Chunker (AST & Tables)
-│   ├── models/                 # Qwen2.5-7B-Instruct SLM Runner
-│   └── parsers/                # Parser trích xuất cây AST từ PDF
-│
-├── docs/                       # 📚 Documentation Hub
-│   ├── full_product_technical_guide.md  # Cẩm nang kỹ thuật toàn diện
-│   ├── development_journey_recap.md     # Nhật ký hành trình phát triển từ A-Z
-│   ├── social_launch_captions.md        # Bộ caption truyền thông đa nền tảng
-│   ├── qdrant_guide.md                  # Hướng dẫn Qdrant Cloud
-│   ├── cloudflare_embedding_guide.md    # Hướng dẫn Cloudflare Workers AI
-│   └── assets/                          # Demo GIF preview, Full HD Video, Brand Logos
-│
-├── tools/                      # 🛠️ CLI Utilities & Production Tools
-│   ├── produce_showcase_video.mjs       # Pipeline tự động quay & xuất bản video showcase
-│   ├── stitch_intro_showcase.mjs        # Script ghép nối Brand Intro FU-DEVER
-│   └── qdrant_cli.mjs                   # CLI quản lý Qdrant Vector DB
-│
-└── dev.mjs                     # Script khởi chạy đồng thời Frontend & Backend
+├── src/                        # Frontend Application (React 19, TypeScript, Vite)
+│   ├── App.tsx                 # Giao diện chính RAG Workspace
+│   ├── LandingPage.tsx         # Trang giới thiệu
+│   ├── components/             # UI Components, PDF Canvas & Citation Overlays
+│   └── styles.css              # Giao diện & animation hệ thống
+├── server/                     # Backend Orchestrator (Node.js ESM)
+│   ├── app.mjs                 # REST API & SSE streaming handler
+│   ├── llm.mjs                 # Gateway điều phối các provider LLM
+│   ├── qdrant.mjs              # Client tương tác với Qdrant Cloud
+│   └── docling.mjs             # Adapter tích hợp parser Docling
+├── rag_engine/                 # Python RAG Engine
+│   ├── chunkers/               # Structure-Aware Chunker (AST & Tables)
+│   ├── models/                 # Model runner
+│   └── parsers/                # Bộ xử lý trích xuất văn bản & OCR
+├── docs/                       # Tài liệu kỹ thuật & assets
+│   ├── full_product_technical_guide.md  # Cẩm nang kỹ thuật chi tiết
+│   ├── development_journey_recap.md     # Nhật ký quá trình phát triển
+│   └── assets/                          # Sơ đồ kiến trúc, demo video & ảnh
+└── dev.mjs                     # Script khởi chạy môi trường phát triển
 ```
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt & Khởi Chạy (Quick Start)
+## Hướng Dẫn Cài Đặt & Chạy (Quick Start)
 
-### 1. Yêu Cầu Môi Trường
-- **Node.js:** v20.x trở lên
-- **Python:** 3.10+ (khuyến nghị có GPU CUDA nếu chạy local embedding)
-- **FFmpeg:** 7.0+ (nếu chạy công cụ sản xuất video tự động)
+### 1. Yêu cầu môi trường
+- Node.js >= 20.x
+- Python >= 3.10 (khuyến nghị có GPU hỗ trợ CUDA)
 
-### 2. Cài Đặt Thư Viện
+### 2. Cài đặt dependencies
 ```bash
 git clone https://github.com/quangnhat1504/SchoolSummar.git
 cd SchoolSummar
 npm install
 ```
 
-### 3. Cấu Hình Biến Môi Trường (`.env`)
+### 3. Cấu hình biến môi trường
 Tạo file `.env` tại thư mục gốc với các thông số:
 ```env
 PORT=6100
@@ -205,26 +88,35 @@ QDRANT_API_KEY=[YOUR_QDRANT_API_KEY]
 QDRANT_COLLECTION_NAME=schoolsummar_chunks
 GROQ_API_KEY=[YOUR_GROQ_API_KEY]
 OPENROUTER_API_KEY=[YOUR_OPENROUTER_API_KEY]
-CLOUDFLARE_ACCOUNT_ID=[YOUR_CF_ID]
-CLOUDFLARE_API_TOKEN=[YOUR_CF_TOKEN]
 ```
 
-### 4. Khởi Chạy Hệ Thống
+### 4. Khởi chạy ứng dụng
 ```bash
-# Khởi chạy toàn bộ hệ thống (Frontend Vite + Backend Express)
 node dev.mjs
 ```
-Mở trình duyệt tại: **`http://localhost:6100`** để bắt đầu trải nghiệm!
+Truy cập giao diện tại: `http://localhost:6100`.
 
 ---
 
-## 👥 Đội Ngũ Phát Triển & Bản Quyền (Credits & License)
+## Tài Liệu Kỹ Thuật (Documentation)
 
-- **Đơn vị phát triển:** **CLB Lập Trình FU-DEVER** (FPT University Da Nang)  
-  *Website:* [https://fudever.com](https://fudever.com)
-- **Tác giả & Kiến trúc trưởng:** **Đặng Quang Nhật** ([@quangnhat1504](https://github.com/quangnhat1504)) cùng đội ngũ kỹ sư FU-DEVER.
-- **Giấy phép:** Phát hành theo giấy phép [MIT License](LICENSE). Mọi đóng góp (Pull Request) từ cộng đồng đều được chào đón!
+- [Cẩm Nang Kỹ Thuật Toàn Diện](docs/full_product_technical_guide.md): Chi tiết kiến trúc, API contracts, schema cơ sở dữ liệu và vận hành production.
+- [Nhật Ký Quá Trình Phát Triển](docs/development_journey_recap.md): Tổng hợp quá trình nghiên cứu, benchmark mô hình và xây dựng hệ thống.
 
-<p align="center">
-  <sub>Built with precision, craft & quiet confidence by FU-DEVER.</sub>
-</p>
+---
+
+## Thành Viên Phát Triển (Project Team)
+
+Dự án được nghiên cứu và phát triển bởi các thành viên thuộc **CLB Lập Trình FU-DEVER (FPT University Da Nang)**:
+
+1. **Đặng Quang Nhật**
+2. **Phạm Minh Tiến**
+3. **Nguyễn Thái Hưng**
+4. **Trương Công Phúc**
+5. **Phan Tuấn Hưng**
+
+---
+
+## License
+
+Dự án được phân phối theo giấy phép [MIT License](LICENSE).
